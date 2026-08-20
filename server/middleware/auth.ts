@@ -25,19 +25,22 @@ export interface AuthenticatedUser {
 }
 
 export const requireApiAuth = async (req: Request, res: Response, next: NextFunction) => {
+  let token: string | null = null;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ 
-      error: 'UNAUTHORIZED', 
-      message: 'Token de autenticação ausente ou inválido.' 
-    });
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split('Bearer ')[1]?.trim() || null;
+  } else if (req.query && req.query.token) {
+    token = String(req.query.token);
+  } else if (req.body && req.body.token) {
+    token = String(req.body.token);
+  } else if ((req as any).cookies && (req as any).cookies.varejopro_auth_token) {
+    token = String((req as any).cookies.varejopro_auth_token);
   }
 
-  const token = authHeader.split('Bearer ')[1]?.trim();
   if (!token) {
     return res.status(401).json({ 
       error: 'UNAUTHORIZED', 
-      message: 'Token não fornecido no cabeçalho Authorization.' 
+      message: 'Token de autenticação ausente ou inválido.' 
     });
   }
 

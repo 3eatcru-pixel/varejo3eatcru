@@ -127,6 +127,7 @@ router.get('/api/billing/checkout-redirect', requireApiAuth, async (req: Request
           </div>
           <form action="/api/billing/simulate-success" method="POST" class="space-y-3">
             <input type="hidden" name="invoiceId" value="${invoice.id}" />
+            <input type="hidden" name="token" value="${req.query.token || (req.headers.authorization?.split('Bearer ')[1] || '')}" />
             <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20">
               Simular Pagamento Aprovado 🚀
             </button>

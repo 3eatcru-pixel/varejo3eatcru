@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { requireApiAuth, requirePermission } from "../middleware/auth";
 import { LicenseService } from "../services/license.service";
 import { db } from "../../src/db/index.ts";
-import { products, inventoryMovements } from "../../src/db/schema.ts";
+import { products, inventoryMovements, users } from "../../src/db/schema.ts";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { logAuditEvent } from "../lib/audit";
 
@@ -37,6 +37,54 @@ router.get("/api/stock/products", requireApiAuth, async (req, res) => {
   }
 });
 
+// List Inventory Audit Trail Movements
+router.get("/api/stock/movements", requireApiAuth, async (req, res) => {
+  try {
+    const userProfile = (req as any).userProfile;
+    if (!userProfile?.companyId) return res.status(403).json({ error: "Contexto de empresa não encontrado." });
+
+    const companyId = userProfile.companyId;
+    const productId = req.query.productId as string | undefined;
+    const type = req.query.type as string | undefined;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+
+    const queryConditions = [eq(inventoryMovements.companyId, companyId)];
+    if (productId) queryConditions.push(eq(inventoryMovements.productId, productId));
+    if (type) queryConditions.push(eq(inventoryMovements.type, type.toUpperCase()));
+
+    const movements = await db.select({
+      id: inventoryMovements.id,
+      companyId: inventoryMovements.companyId,
+      productId: inventoryMovements.productId,
+      productName: products.name,
+      userId: inventoryMovements.userId,
+      userName: users.name,
+      type: inventoryMovements.type,
+      quantity: inventoryMovements.quantity,
+      referenceId: inventoryMovements.referenceId,
+      createdAt: inventoryMovements.createdAt
+    })
+    .from(inventoryMovements)
+    .leftJoin(products, eq(inventoryMovements.productId, products.id))
+    .leftJoin(users, eq(inventoryMovements.userId, users.id))
+    .where(and(...queryConditions))
+    .orderBy(desc(inventoryMovements.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+    return res.json({
+      success: true,
+      movements,
+      pagination: { page, limit }
+    });
+  } catch (error: any) {
+    console.error("Erro ao listar movimentações de estoque:", error);
+    return res.status(500).json({ error: error.message || "Erro ao consultar movimentações." });
+  }
+});
+
 // Create or Update Product
 router.post("/api/stock/products", requireApiAuth, requirePermission("manageStock"), async (req, res) => {
   try {
@@ -60,7 +108,6 @@ router.post("/api/stock/products", requireApiAuth, requirePermission("manageStoc
         sku: body.sku !== undefined ? body.sku : existing[0].sku,
         price: body.price !== undefined ? Number(body.price) : existing[0].price,
         costPrice: body.costPrice !== undefined ? Number(body.costPrice) : existing[0].costPrice,
-        // stock: body.stock !== undefined ? Number(body.stock) : existing[0].stock, // REMOVED
         categoryId: body.categoryId || body.category || existing[0].categoryId,
         updatedAt: nowIso
       }).where(and(eq(products.id, productId), eq(products.companyId, companyId)));
@@ -128,11 +175,16 @@ router.post(["/api/stock/adjust", "/api/stock/movement"], requireApiAuth, requir
     const { productId, delta, type = 'IN', reason = 'Ajuste manual de estoque' } = req.body;
 
     if (!productId) return res.status(400).json({ error: "ID do produto é obrigatório." });
-    const numDelta = Number(delta) || 0;
+    
+    const numDelta = Number(delta);
+    if (!Number.isFinite(numDelta) || numDelta === 0) {
+      return res.status(400).json({ error: "Informe uma quantidade de ajuste válida (número diferente de zero)." });
+    }
+
     const nowIso = new Date().toISOString();
 
     await db.transaction(async (tx) => {
-      // Atomic adjustment to prevent race conditions (Audit Point 5)
+      // Atomic adjustment to prevent race conditions
       const updatedRows = await tx.update(products)
         .set({ 
           stock: sql`${products.stock} + ${numDelta}`, 
@@ -142,7 +194,7 @@ router.post(["/api/stock/adjust", "/api/stock/movement"], requireApiAuth, requir
         .returning({ id: products.id, stock: products.stock });
 
       if (updatedRows.length === 0) {
-        throw new Error("Produto não encontrado ou estoque insuficiente.");
+        throw new Error("Produto não encontrado.");
       }
 
       await tx.insert(inventoryMovements).values({

@@ -72,6 +72,7 @@ export type MenuTab =
   | 'relatorios'
   | 'fiscal_documentos'
   | 'admin_equipe'
+  | 'admin_escala'
   | 'admin_usuarios' 
   | 'admin_permissoes' 
   | 'admin_auditoria'
@@ -211,6 +212,7 @@ export const menuGroups: MenuGroup[] = [
       { id: 'admin_branding', label: 'Dados & Identidade', icon: Building2, adminOnly: true },
       { id: 'admin_filiais', label: 'Filiais & Unidades', icon: MapPin, adminOnly: true },
       { id: 'admin_equipe', label: 'Equipe & Funcionários', icon: Users, adminOnly: true },
+      { id: 'admin_escala', label: 'Escala de Trabalho', icon: CalendarIcon, adminOnly: true },
       { id: 'admin_usuarios', label: 'Usuários do Sistema', icon: UserCheck, adminOnly: true },
       { id: 'admin_permissoes', label: 'Permissões (RBAC)', icon: ShieldCheck, adminOnly: true },
       { id: 'admin_configuracoes', label: 'Regras de Negócio', icon: Sliders, adminOnly: true },

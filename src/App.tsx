@@ -40,6 +40,7 @@ import FiscalManager from './modules/fiscal/FiscalManager';
 import ExecutiveReports from './modules/relatorios/ExecutiveReports';
 import UserManager from './modules/administrativo/usuarios/UserManager';
 import EmployeeManager from './modules/administrativo/equipe/EmployeeManager';
+import EmployeeScheduleManager from './modules/administrativo/equipe/EmployeeScheduleManager';
 import PermissionsMatrix from './modules/administrativo/usuarios/PermissionsMatrix';
 import Settings from './modules/administrativo/configuracoes';
 import CompanyBrandingSettings from './modules/administrativo/configuracoes/CompanyBrandingSettings';
@@ -365,6 +366,11 @@ function MainApplication() {
             {activeTab === 'admin_equipe' && (
               <ProtectedRoute user={userProfile} adminOnly>
                 <EmployeeManager />
+              </ProtectedRoute>
+            )}
+            {activeTab === 'admin_escala' && (
+              <ProtectedRoute user={userProfile} adminOnly>
+                <EmployeeScheduleManager onNavigateToTeam={() => setActiveTab('admin_equipe')} />
               </ProtectedRoute>
             )}
             {activeTab === 'admin_permissoes' && (

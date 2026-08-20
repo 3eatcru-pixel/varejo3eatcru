@@ -53,8 +53,12 @@ export default function FileVault({ user }: { user: UserProfile }) {
     formData.append('file', file);
 
     try {
+      const token = localStorage.getItem('varejopro_auth_token') || localStorage.getItem('auth_token') || '';
       const res = await fetch('/api/upload', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData
       });
       const data = await res.json();

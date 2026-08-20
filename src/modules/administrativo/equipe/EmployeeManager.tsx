@@ -25,6 +25,7 @@ import {
 import { Employee, EmployeePulseStatus, UserProfile, Branch } from '../../../types';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useWorkspace } from '../../../contexts/WorkspaceContext';
+import EmployeeScheduleManager from './EmployeeScheduleManager';
 
 interface EmployeeFormState {
   id?: string;
@@ -56,6 +57,7 @@ const INITIAL_FORM: EmployeeFormState = {
 
 export default function EmployeeManager() {
   const { userProfile } = useAuth();
+  const [activeSubTab, setActiveSubTab] = useState<'EMPLOYEES' | 'SCHEDULE'>('EMPLOYEES');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +154,10 @@ export default function EmployeeManager() {
     emp.department?.toLowerCase().includes(search.toLowerCase())
   );
 
+  if (activeSubTab === 'SCHEDULE') {
+    return <EmployeeScheduleManager onNavigateToTeam={() => setActiveSubTab('EMPLOYEES')} />;
+  }
+
   return (
     <div className="flex-1 bg-slate-100 p-6 overflow-y-auto">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -159,24 +165,55 @@ export default function EmployeeManager() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
+            <div className="flex items-center gap-2 text-indigo-600 text-xs font-black uppercase tracking-widest mb-1">
+              <Users className="w-4 h-4" />
+              <span>Recursos Humanos & Gestão de Pessoal</span>
+            </div>
             <h2 className="text-xl font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
-              <Users className="w-6 h-6 text-indigo-500" />
-              Gestão de Equipe & Funcionários
+              Gestão de Equipe & Colaboradores
             </h2>
             <p className="text-xs font-bold text-slate-500 mt-1">
-              Gerencie o cadastro operacional, cargos e disponibilidade da sua equipe Pulse
+              Gerencie o cadastro operacional, cargos, comissões e disponibilidade da sua equipe
             </p>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setActiveSubTab('SCHEDULE')}
+              className="bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider px-4 py-3 rounded-2xl transition-all shadow-md flex items-center gap-2 shrink-0"
+            >
+              <Calendar className="w-4 h-4" />
+              Ver Escala de Trabalho
+            </button>
+
+            <button
+              onClick={() => {
+                setForm(INITIAL_FORM);
+                setIsModalOpen(true);
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-2xl transition-all shadow-md flex items-center gap-2 shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Funcionário
+            </button>
+          </div>
+        </div>
+
+        {/* SubTab Switcher */}
+        <div className="flex items-center gap-2 bg-slate-200/80 p-1.5 rounded-2xl w-fit">
           <button
-            onClick={() => {
-              setForm(INITIAL_FORM);
-              setIsModalOpen(true);
-            }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-2xl transition-all shadow-md flex items-center gap-2 shrink-0"
+            onClick={() => setActiveSubTab('EMPLOYEES')}
+            className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all bg-white text-slate-900 shadow-sm"
           >
-            <Plus className="w-4 h-4" />
-            Novo Funcionário
+            <Users className="w-4 h-4 text-indigo-500" />
+            Colaboradores Cadastrados ({employees.length})
+          </button>
+          <button
+            onClick={() => setActiveSubTab('SCHEDULE')}
+            className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all text-slate-600 hover:text-slate-900"
+          >
+            <Calendar className="w-4 h-4 text-teal-600" />
+            Escala & Turnos Semanais
           </button>
         </div>
 

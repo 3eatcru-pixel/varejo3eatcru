@@ -302,16 +302,47 @@ router.get('/api/pulse/public/resolve/:code', async (req, res) => {
       }
     }
 
+    const sanitizedCompany = {
+      name: company.name || 'VarejoPro Estabelecimento',
+      logoUrl: (company as any).logoUrl || null,
+      document: (company as any).document || null
+    };
+
+    const sanitizedServices = servicesSnap.map(s => ({
+      id: s.id,
+      name: s.name,
+      price: Number(s.price) || 0,
+      durationMinutes: s.durationMinutes ?? s.duration ?? 30,
+      category: s.categoryId || 'Geral',
+      description: s.description || ''
+    }));
+
+    const sanitizedProfessionals = professionals.map(p => ({
+      id: p.id,
+      name: p.displayName || p.name,
+      displayName: p.displayName || p.name,
+      avatarUrl: (p as any).avatarUrl || null,
+      specialty: (p as any).specialty || '',
+      serviceIds: p.serviceIds || []
+    }));
+
+    const sanitizedProducts = productsSnap.map(p => ({
+      id: p.id,
+      name: p.name,
+      price: Number(p.price) || 0,
+      categoryId: p.categoryId || 'Geral',
+      sku: p.sku || null,
+      barcode: p.barcode || null,
+      inStock: (Number(p.stock) || 0) > 0
+    }));
+
     res.json({
       success: true,
       qrCode: formattedQr,
-      company,
-      services: servicesSnap.map(s => ({
-        ...s,
-        durationMinutes: s.durationMinutes ?? s.duration ?? 30
-      })),
-      professionals,
-      products: productsSnap,
+      company: sanitizedCompany,
+      services: sanitizedServices,
+      professionals: sanitizedProfessionals,
+      products: sanitizedProducts,
       activeSession
     });
   } catch (error: any) {

@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from '../../src/db';
-import { users, companies, memberships, branches, devices, platformCompanies, platformSubscriptions } from '../../src/db/schema';
+import { users, companies, memberships, branches, devices, platformCompanies, platformSubscriptions, userInvitations } from '../../src/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { requireApiAuth } from '../middleware/auth';
@@ -446,6 +446,156 @@ router.post('/api/auth/send-verification', requireApiAuth, async (req, res) => {
     });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
+  }
+});
+
+// Get Invitation Info (Public - for invitation acceptance screen)
+router.get('/api/auth/invitations/:id', async (req, res) => {
+  try {
+    const inviteId = String(req.params.id);
+    const [invite] = await db.select().from(userInvitations).where(eq(userInvitations.id, inviteId)).limit(1);
+
+    if (!invite) {
+      return res.status(404).json({ error: 'Convite não encontrado ou inválido.' });
+    }
+
+    if (invite.status === 'ACCEPTED') {
+      return res.status(400).json({ error: 'Este convite já foi aceito anteriormente.' });
+    }
+
+    if (new Date(invite.expiresAt).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Este convite expirou. Solicite um novo convite ao administrador.' });
+    }
+
+    const [company] = await db.select().from(companies).where(eq(companies.id, invite.companyId)).limit(1);
+
+    return res.json({
+      success: true,
+      invitation: {
+        id: invite.id,
+        email: invite.email,
+        role: invite.role,
+        companyName: company ? company.name : 'Empresa Parceira',
+        expiresAt: invite.expiresAt
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Accept Invitation Endpoint (Audit Point 10: Single-use, expiration, membership linking)
+router.post('/api/auth/invitations/accept', async (req, res) => {
+  try {
+    const { inviteId, name, password } = req.body;
+
+    if (!inviteId) {
+      return res.status(400).json({ error: 'ID do convite é obrigatório.' });
+    }
+
+    const [invite] = await db.select().from(userInvitations).where(eq(userInvitations.id, inviteId)).limit(1);
+
+    if (!invite) {
+      return res.status(404).json({ error: 'Convite não encontrado.' });
+    }
+
+    if (invite.status === 'ACCEPTED') {
+      return res.status(400).json({ error: 'Este convite já foi utilizado.' });
+    }
+
+    if (new Date(invite.expiresAt).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Este convite expirou. Solicite um novo convite.' });
+    }
+
+    const nowIso = new Date().toISOString();
+    let userId = '';
+    let userName = name || '';
+
+    // Check if user already exists
+    const [existingUser] = await db.select().from(users).where(eq(users.email, invite.email)).limit(1);
+
+    await db.transaction(async (tx) => {
+      if (existingUser) {
+        userId = existingUser.id;
+        userName = existingUser.name;
+        // Verify if user already has membership in this company
+        const [existingMem] = await tx.select().from(memberships).where(
+          and(eq(memberships.userId, userId), eq(memberships.companyId, invite.companyId))
+        ).limit(1);
+
+        if (existingMem) {
+          await tx.update(memberships).set({ role: invite.role }).where(eq(memberships.id, existingMem.id));
+        } else {
+          await tx.insert(memberships).values({
+            id: crypto.randomUUID(),
+            userId,
+            companyId: invite.companyId,
+            role: invite.role,
+            createdAt: nowIso
+          });
+        }
+      } else {
+        if (!password || password.length < 6) {
+          throw new Error('A senha deve ter no mínimo 6 caracteres.');
+        }
+        userId = crypto.randomUUID();
+        userName = name || invite.email.split('@')[0];
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        await tx.insert(users).values({
+          id: userId,
+          name: userName,
+          email: invite.email,
+          passwordHash,
+          tokenVersion: 1,
+          createdAt: nowIso
+        });
+
+        await tx.insert(memberships).values({
+          id: crypto.randomUUID(),
+          userId,
+          companyId: invite.companyId,
+          role: invite.role,
+          createdAt: nowIso
+        });
+      }
+
+      // Mark invitation as ACCEPTED (prevents replay / multi-use attacks)
+      await tx.update(userInvitations).set({
+        status: 'ACCEPTED'
+      }).where(eq(userInvitations.id, inviteId));
+    });
+
+    const [comp] = await db.select().from(companies).where(eq(companies.id, invite.companyId)).limit(1);
+
+    const token = jwt.sign(
+      { 
+        uid: userId, 
+        email: invite.email, 
+        role: invite.role, 
+        companyId: invite.companyId,
+        version: 1
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      success: true,
+      token,
+      user: {
+        uid: userId,
+        name: userName,
+        email: invite.email,
+        role: invite.role,
+        companyId: invite.companyId,
+        companyName: comp ? comp.name : 'Minha Empresa'
+      }
+    });
+  } catch (error: any) {
+    console.error('Erro ao aceitar convite:', error);
+    return res.status(400).json({ error: error.message || 'Erro ao processar convite.' });
   }
 });
 

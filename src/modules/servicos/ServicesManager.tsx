@@ -37,15 +37,17 @@ export default function ServicesManager() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
+      const headers = { 'Authorization': `Bearer ${token}` };
       const [resServ, resProf] = await Promise.all([
-        fetch('/api/services'),
-        fetch('/api/professionals')
+        fetch('/api/services', { headers }),
+        fetch('/api/professionals', { headers })
       ]);
       const dataServ = await resServ.json();
       const dataProf = await resProf.json();
 
-      if (dataServ.success) setServices(dataServ.services);
-      if (dataProf.success) setProfessionals(dataProf.professionals);
+      if (dataServ.success) setServices(dataServ.services || []);
+      if (dataProf.success) setProfessionals(dataProf.professionals || []);
     } catch (e) {
       console.error('Erro ao buscar dados de serviços:', e);
     } finally {
@@ -60,6 +62,7 @@ export default function ServicesManager() {
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const payload = {
         id: editingService?.id,
         ...serviceForm,
@@ -70,7 +73,10 @@ export default function ServicesManager() {
 
       const res = await fetch('/api/services', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -90,8 +96,10 @@ export default function ServicesManager() {
   const handleDeleteService = async (id: string) => {
     if (!confirm('Deseja realmente excluir este serviço do catálogo?')) return;
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const res = await fetch(`/api/services/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       if (data.success) {
@@ -107,6 +115,7 @@ export default function ServicesManager() {
   const handleSaveProf = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const payload = {
         id: editingProf?.id || undefined,
         displayName: profForm.displayName,
@@ -116,7 +125,10 @@ export default function ServicesManager() {
 
       const res = await fetch('/api/professionals', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -136,8 +148,10 @@ export default function ServicesManager() {
   const handleDeleteProf = async (id: string) => {
     if (!confirm('Deseja realmente remover este profissional da agenda?')) return;
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const res = await fetch(`/api/professionals/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       if (data.success) {

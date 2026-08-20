@@ -276,12 +276,19 @@ const createAppointmentHandler = async (req: express.Request, res: express.Respo
       )
     );
     const service = servSnap[0];
-    const serviceName = service ? service.name : 'Serviço';
-    const servicePrice = service ? service.price : 0;
-    const duration = service ? (service.durationMinutes || service.duration || 30) : 30;
+    if (!service) {
+      return res.status(400).json({ error: 'Serviço não encontrado ou pertence a outra empresa.' });
+    }
+
+    const serviceName = service.name;
+    const servicePrice = service.price || 0;
+    const duration = service.durationMinutes || service.duration || 30;
 
     // Calculate endAt
     const startDate = new Date(startAt);
+    if (isNaN(startDate.getTime())) {
+      return res.status(400).json({ error: 'Formato de data e hora do agendamento inválido.' });
+    }
     const endDate = new Date(startDate.getTime() + duration * 60000);
     const endAt = endDate.toISOString();
 
@@ -292,20 +299,45 @@ const createAppointmentHandler = async (req: express.Request, res: express.Respo
       serviceId,
       serviceName,
       servicePrice,
-      professionalId,
+      professionalId: professionalId || 'geral',
       date: startAt.split('T')[0],
       startAt,
       endAt,
-      customerName,
-      customerPhone: customerPhone || null,
-      customerEmail: customerEmail || null,
-      notes: notes || null,
+      customerName: String(customerName || 'Cliente Balcão').trim(),
+      customerPhone: customerPhone ? String(customerPhone).trim() : null,
+      customerEmail: customerEmail ? String(customerEmail).trim() : null,
+      notes: notes ? String(notes).trim() : null,
       status: 'CONFIRMADO', // Auto-confirm standard bookings
       createdAt: new Date().toISOString()
     };
 
     await db.insert(appointments).values(payload);
     res.json({ success: true, appointment: payload });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const deleteAppointmentHandler = async (req: express.Request, res: express.Response) => {
+  try {
+    const companyId = (req as any).auth?.companyId;
+    if (!companyId) {
+      return res.status(401).json({ error: 'Company ID not found.' });
+    }
+
+    const id = req.params.id || req.query.id || req.body.id;
+    if (!id) {
+      return res.status(400).json({ error: 'Missing appointment id.' });
+    }
+
+    await db.delete(appointments).where(
+      and(
+        eq(appointments.id, String(id)),
+        eq(appointments.companyId, companyId)
+      )
+    );
+
+    res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -325,7 +357,7 @@ const updateAppointmentStatusHandler = async (req: express.Request, res: express
     }
 
     // Secure UPDATE with companyId clause (Multi-tenant check)
-    const result = await db.update(appointments)
+    await db.update(appointments)
       .set({ status })
       .where(
         and(
@@ -346,5 +378,7 @@ router.post('/api/appointments', requireApiAuth, requirePermission('posAccess'),
 router.post('/api/appointments/create', requireApiAuth, requirePermission('posAccess'), createAppointmentHandler);
 router.put('/api/appointments/:id/status', requireApiAuth, requirePermission('posAccess'), updateAppointmentStatusHandler);
 router.post('/api/appointments/update-status', requireApiAuth, requirePermission('posAccess'), updateAppointmentStatusHandler);
+router.delete('/api/appointments/:id', requireApiAuth, requirePermission('posAccess'), deleteAppointmentHandler);
+router.post('/api/appointments/delete', requireApiAuth, requirePermission('posAccess'), deleteAppointmentHandler);
 
 export default router;

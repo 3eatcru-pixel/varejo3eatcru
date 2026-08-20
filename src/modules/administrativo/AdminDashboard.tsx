@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserProfile } from '../../types';
-import { Building2, Users, ShieldCheck, Sliders, Receipt, Archive, ShieldAlert, CreditCard, ChevronRight, Activity, Zap, BarChart3 } from 'lucide-react';
+import { Building2, Users, ShieldCheck, Sliders, Receipt, Archive, ShieldAlert, CreditCard, ChevronRight, Activity, Zap, BarChart3, CheckCircle2, Calendar } from 'lucide-react';
 
 interface AdminDashboardProps {
   user: UserProfile;
@@ -11,6 +11,7 @@ export default function AdminDashboard({ user, onNavigate }: AdminDashboardProps
   const adminCards = [
     { id: 'admin_branding', label: 'Dados & Identidade', description: 'Logo, cores, endereços e contatos comerciais.', icon: Building2, color: 'bg-emerald-500' },
     { id: 'admin_equipe', label: 'Equipe & Funcionários', description: 'Gestão de colaboradores, cargos e comissões.', icon: Users, color: 'bg-blue-500' },
+    { id: 'admin_escala', label: 'Escala de Trabalho', description: 'Turnos, escalas semanais e folgas de funcionários.', icon: Calendar, color: 'bg-teal-500' },
     { id: 'admin_usuarios', label: 'Acesso ao Sistema', description: 'Controle de quem pode entrar e usar o VarejoPro.', icon: ShieldCheck, color: 'bg-indigo-500' },
     { id: 'admin_configuracoes', label: 'Regras de Negócio', description: 'Parâmetros de venda, estoque e operação.', icon: Sliders, color: 'bg-amber-500' },
     { id: 'fiscal_documentos', label: 'Fiscal & Impostos', description: 'Configuração de tributos e documentos fiscais.', icon: Receipt, color: 'bg-rose-500' },
@@ -146,25 +147,5 @@ export default function AdminDashboard({ user, onNavigate }: AdminDashboardProps
         </div>
       </div>
     </div>
-  );
-}
-
-function CheckCircle2(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-      <path d="m9 12 2 2 4-4" />
-    </svg>
   );
 }

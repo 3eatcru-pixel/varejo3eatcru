@@ -87,11 +87,13 @@ export default function PulseDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
+      const headers = { 'Authorization': `Bearer ${token}` };
       const [resQrs, resMetrics, resServ, resProf] = await Promise.all([
-        fetch('/api/pulse/qrcodes'),
-        fetch('/api/pulse/dashboard-metrics'),
-        fetch('/api/services'),
-        fetch('/api/professionals')
+        fetch('/api/pulse/qrcodes', { headers }),
+        fetch('/api/pulse/dashboard-metrics', { headers }),
+        fetch('/api/services', { headers }),
+        fetch('/api/professionals', { headers })
       ]);
 
       const dataQrs = await resQrs.json();
@@ -165,6 +167,7 @@ export default function PulseDashboard() {
 
     setSaving(true);
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const targetData: any = {};
       if (formContext === 'SERVICE_BOOKING') {
         targetData.serviceIds = selectedServiceIds;
@@ -185,7 +188,10 @@ export default function PulseDashboard() {
 
       const res = await fetch('/api/pulse/qrcodes/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
 
@@ -206,9 +212,13 @@ export default function PulseDashboard() {
   const handleToggleStatus = async (qr: PulseQRCode) => {
     const newStatus = qr.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const res = await fetch('/api/pulse/qrcodes/toggle-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ id: qr.id, status: newStatus })
       });
       const json = await res.json();
@@ -223,8 +233,10 @@ export default function PulseDashboard() {
   const handleDeleteQr = async (id: string) => {
     if (!confirm('Deseja realmente excluir este QR Code Pulse?')) return;
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const res = await fetch(`/api/pulse/qrcodes/delete?id=${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const json = await res.json();
       if (json.success) {

@@ -8,7 +8,7 @@ import {
 } from '../types';
 
 async function getHeaders() {
-  const token = localStorage.getItem('varejopro_auth_token');
+  const token = localStorage.getItem('varejopro_auth_token') || localStorage.getItem('auth_token') || '';
   return {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`
@@ -19,10 +19,22 @@ export async function getActiveCashRegister(userProfile: UserProfile): Promise<C
   const companyId = userProfile?.companyId;
   if (!companyId) return null;
 
-  const branchId = userProfile.branchId || 'default_branch';
   const terminalId = userProfile.terminalId || 'default_terminal';
 
   try {
+    const res = await fetch(`/api/cash-register/current?terminalId=${encodeURIComponent(terminalId)}`, {
+      headers: await getHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.register) return data.register as CashRegister;
+    }
+  } catch (apiErr) {
+    console.warn("Falha ao buscar caixa via API, tentando Firestore...", apiErr);
+  }
+
+  try {
+    const branchId = userProfile.branchId || 'default_branch';
     const q = query(
       collection(db, 'cash_registers'),
       where('companyId', '==', companyId),
@@ -41,6 +53,21 @@ export async function getActiveCashRegister(userProfile: UserProfile): Promise<C
   } catch (error) {
     return null;
   }
+}
+
+export async function getCashRegisterHistory(): Promise<CashRegister[]> {
+  try {
+    const response = await fetch('/api/cash-register/history', {
+      headers: await getHeaders()
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return (data.history || []) as CashRegister[];
+    }
+  } catch (err) {
+    console.warn("Erro ao buscar histórico de caixas via API:", err);
+  }
+  return [];
 }
 
 export async function openCashRegister(
@@ -103,4 +130,3 @@ export async function closeCashRegister(
   const data = await response.json();
   return data.register;
 }
-

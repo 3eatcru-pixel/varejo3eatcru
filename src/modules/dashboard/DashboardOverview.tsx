@@ -199,7 +199,7 @@ export default function DashboardOverview({
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <button
-            onClick={() => onNavigate('checkout')}
+            onClick={() => onNavigate('vendas_pos')}
             className="flex-1 md:flex-initial px-4 py-3 min-h-[48px] bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
           >
             <ShoppingBag className="w-4 h-4" />
@@ -207,7 +207,7 @@ export default function DashboardOverview({
           </button>
           
           <button
-            onClick={() => onNavigate('purchases')}
+            onClick={() => onNavigate('compras_entradas')}
             className="flex-1 md:flex-initial px-4 py-3 min-h-[48px] bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-600 transition-all flex items-center justify-center gap-2"
           >
             <PackageCheck className="w-4 h-4 text-emerald-400" />
@@ -290,10 +290,10 @@ export default function DashboardOverview({
                 <span>Aniversariantes do Dia</span>
               </h2>
               <button 
-                onClick={() => onNavigate('whatsapp')}
+                onClick={() => onNavigate('cadastros_clientes_fidelidade')}
                 className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-wider"
               >
-                Ver Marketing WhatsApp &rarr;
+                Ver Clientes & Fidelidade &rarr;
               </button>
             </div>
 
@@ -330,7 +330,7 @@ export default function DashboardOverview({
                 <span>Produtos com Estoque Crítico</span>
               </h2>
               <button 
-                onClick={() => onNavigate('inventory')}
+                onClick={() => onNavigate('estoque_inventario')}
                 className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-wider"
               >
                 Gerenciar Estoque &rarr;
@@ -363,7 +363,7 @@ export default function DashboardOverview({
                         <td className="py-3 text-center text-slate-400">{prod.minStock || 3}</td>
                         <td className="py-3 text-right">
                           <button
-                            onClick={() => onNavigate('purchases')}
+                            onClick={() => onNavigate('compras_entradas')}
                             className="min-h-[36px] px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all uppercase tracking-wider inline-flex items-center"
                           >
                             Pedir Fornecedor
@@ -445,7 +445,7 @@ export default function DashboardOverview({
             </div>
             
             <button
-              onClick={() => onNavigate('assistant')}
+              onClick={() => onNavigate('inicio_assistant')}
               className="w-full text-center text-[10px] font-black uppercase text-slate-400 hover:text-emerald-400 transition-all"
             >
               Abrir Tela Completa do Assistente IA &rarr;

@@ -139,8 +139,25 @@ export const cashRegisters = pgTable('cash_registers', {
   status: text('status').notNull(), // 'OPEN', 'CLOSED'
   openingBalance: doublePrecision('opening_balance').notNull(),
   closingBalance: doublePrecision('closing_balance'),
+  declaredCash: doublePrecision('declared_cash'),
+  declaredCredit: doublePrecision('declared_credit'),
+  declaredDebit: doublePrecision('declared_debit'),
+  declaredPix: doublePrecision('declared_pix'),
+  cashDifference: doublePrecision('cash_difference'),
+  notes: text('notes'),
   openedAt: text('opened_at').notNull(),
   closedAt: text('closed_at'),
+});
+
+export const cashRegisterOperations = pgTable('cash_register_operations', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
+  cashRegisterId: text('cash_register_id').notNull().references(() => cashRegisters.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  type: text('type').notNull(), // 'SANGRIA', 'SUPRIMENTO'
+  amount: doublePrecision('amount').notNull(),
+  reason: text('reason').notNull(),
+  createdAt: text('created_at').notNull(),
 });
 
 export const sales = pgTable('sales', {
@@ -171,10 +188,15 @@ export const saleItems = pgTable('sale_items', {
 
 export const fiscalDocuments = pgTable('fiscal_documents', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id),
   saleId: text('sale_id').notNull().references(() => sales.id),
+  type: text('type').notNull().default('NFCE'),
+  status: text('status').notNull().default('AUTHORIZED'),
   xml: text('xml').notNull(),
-  status: text('status').notNull(),
+  protocol: text('protocol'),
+  accessKey: text('access_key'),
   createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at'),
 });
 
 // --- FINANCE ---
@@ -423,5 +445,23 @@ export const employees = pgTable('employees', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at'),
 });
+
+export const employeeSchedules = pgTable('employee_schedules', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
+  employeeId: text('employee_id').notNull().references(() => employees.id),
+  branchId: text('branch_id').references(() => branches.id),
+  dayOfWeek: integer('day_of_week').notNull(), // 0: Domingo, 1: Segunda, 2: Terça, 3: Quarta, 4: Quinta, 5: Sexta, 6: Sábado
+  shiftDate: text('shift_date'), // YYYY-MM-DD for specific day or null for recurring weekly schedule
+  shiftType: text('shift_type').notNull().default('PADRAO'), // 'PADRAO', 'MANHA', 'TARDE', 'NOITE', 'PLANTAO_12X36', 'FOLGA', 'FERIAS', 'EXTRA'
+  startTime: text('start_time').notNull().default('08:00'), // '08:00'
+  endTime: text('end_time').notNull().default('17:00'), // '17:00'
+  breakMinutes: integer('break_minutes').notNull().default(60), // Intervalo (ex: 60 minutos)
+  status: text('status').notNull().default('SCHEDULED'), // 'SCHEDULED', 'ACTIVE', 'COMPLETED', 'FOLGA', 'FERIAS', 'CANCELLED'
+  notes: text('notes'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at'),
+});
+
 
 

@@ -33,7 +33,7 @@ import {
   PaymentMethod, 
   UserProfile 
 } from '../../types';
-import { getActiveCashRegister } from '../../services/CashRegisterService';
+import { getActiveCashRegister, getCashRegisterHistory } from '../../services/CashRegisterService';
 import CashRegisterModal from './CashRegisterModal';
 import CashRegisterAuditModal from './CashRegisterAuditModal';
 
@@ -63,6 +63,12 @@ export default function CashRegisterView({
     if (!companyId) return;
     setLoadingHistory(true);
     try {
+      const apiHistory = await getCashRegisterHistory();
+      if (apiHistory && apiHistory.length > 0) {
+        setHistory(apiHistory);
+        return;
+      }
+
       const q = query(
         collection(db, 'cash_registers'),
         where('companyId', '==', companyId),

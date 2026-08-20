@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, Plus, User, CheckCircle, XCircle, AlertCircle, Filter, ChevronLeft, ChevronRight, Scissors } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Plus, User, CheckCircle, XCircle, AlertCircle, Filter, ChevronLeft, ChevronRight, Scissors, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function AppointmentsCalendar({ onSendToPDV }: { onSendToPDV?: (serviceItem: any) => void }) {
@@ -27,18 +27,20 @@ export default function AppointmentsCalendar({ onSendToPDV }: { onSendToPDV?: (s
   const fetchData = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
+      const headers = { 'Authorization': `Bearer ${token}` };
       const [resAppt, resServ, resProf] = await Promise.all([
-        fetch('/api/appointments'),
-        fetch('/api/services'),
-        fetch('/api/professionals')
+        fetch('/api/appointments', { headers }),
+        fetch('/api/services', { headers }),
+        fetch('/api/professionals', { headers })
       ]);
       const dataAppt = await resAppt.json();
       const dataServ = await resServ.json();
       const dataProf = await resProf.json();
 
-      if (dataAppt.success) setAppointments(dataAppt.appointments);
-      if (dataServ.success) setServices(dataServ.services);
-      if (dataProf.success) setProfessionals(dataProf.professionals);
+      if (dataAppt.success) setAppointments(dataAppt.appointments || []);
+      if (dataServ.success) setServices(dataServ.services || []);
+      if (dataProf.success) setProfessionals(dataProf.professionals || []);
     } catch (e) {
       console.error('Erro ao buscar dados da agenda:', e);
     } finally {
@@ -53,6 +55,7 @@ export default function AppointmentsCalendar({ onSendToPDV }: { onSendToPDV?: (s
   const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const startAtDateTime = `${selectedDate}T${form.startAtTime}:00`;
       const payload = {
         customerName: form.customerName || 'Cliente Balcão',
@@ -64,7 +67,10 @@ export default function AppointmentsCalendar({ onSendToPDV }: { onSendToPDV?: (s
 
       const res = await fetch('/api/appointments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -82,9 +88,13 @@ export default function AppointmentsCalendar({ onSendToPDV }: { onSendToPDV?: (s
 
   const handleUpdateStatus = async (appointmentId: string, status: string) => {
     try {
+      const token = localStorage.getItem('varejopro_auth_token');
       const res = await fetch(`/api/appointments/${appointmentId}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ status })
       });
       const data = await res.json();
@@ -92,6 +102,25 @@ export default function AppointmentsCalendar({ onSendToPDV }: { onSendToPDV?: (s
         fetchData();
       } else {
         alert(data.error || 'Erro ao atualizar status.');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    if (!confirm('Deseja realmente excluir este agendamento?')) return;
+    try {
+      const token = localStorage.getItem('varejopro_auth_token');
+      const res = await fetch(`/api/appointments/${appointmentId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchData();
+      } else {
+        alert(data.error || 'Erro ao excluir agendamento.');
       }
     } catch (err: any) {
       alert(err.message);
@@ -219,6 +248,13 @@ export default function AppointmentsCalendar({ onSendToPDV }: { onSendToPDV?: (s
                       </button>
                     </>
                   )}
+                  <button
+                    onClick={() => handleDeleteAppointment(appt.id)}
+                    title="Excluir agendamento"
+                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             );
