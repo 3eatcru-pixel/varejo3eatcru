@@ -44,7 +44,7 @@ import { Product, UserProfile, CompanyRole, OperationType, InventorySettings } f
 import { cn, formatCurrency } from '../../../lib/utils';
 import { handleFirestoreError } from '../../../lib/firestore-errors';
 import BarcodeScanner from '../../../components/BarcodeScanner';
-import { createProduct, updateProduct, deleteProduct, checkBarcodeExists } from '../../../services/ProductService';
+import { createProduct, updateProduct, deleteProduct, checkBarcodeExists, fetchProducts } from '../../../services/ProductService';
 import { useToast } from '../../../components/Toast';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 import { ProductModal } from './ProductModal';
@@ -195,32 +195,23 @@ export default function InventoryList({ user }: { user: UserProfile }) {
     return () => unsubscribe();
   }, [user.companyId]);
 
-  // Load Products
-  useEffect(() => {
-    const companyId = user.companyId || '';
-    const q = query(
-      collection(db, 'products'),
-      where('companyId', '==', companyId),
-      limit(300)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) {
-        // Seed initial retail products for this company
-        INITIAL_RETAIL_PRODUCTS.forEach(p => {
-          addDoc(collection(db, 'products'), { ...p, companyId, updatedAt: serverTimestamp() });
-        });
-      }
-      const data = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Product))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      setProducts(data);
+  // Load Products via API
+  const loadProductCatalog = async () => {
+    try {
+      setLoading(true);
+      const res = await fetchProducts(1, 300);
+      setProducts(res.products.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      console.warn('Erro ao carregar produtos da API:', error);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      console.warn('Erro ao carregar produtos:', error);
-      setLoading(false);
-    });
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    if (user.companyId) {
+      loadProductCatalog();
+    }
   }, [user.companyId]);
 
   const saveGlobalSettings = async (updated: InventorySettings) => {

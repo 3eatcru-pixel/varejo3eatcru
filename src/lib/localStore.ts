@@ -117,8 +117,77 @@ function getSeedForCollection(colName: string): Record<string, any> {
 }
 
 // -------------------------------------------------------------
-// FIRESTORE COMPATIBLE INTERFACES & FUNCTIONS
+// FIRESTORE COMPATIBLE INTERFACES & BACKEND POSTGRESQL SYNC
 // -------------------------------------------------------------
+
+const lastSyncTimestamps: Record<string, number> = {};
+
+export async function syncCollectionWithServer(colName: string): Promise<void> {
+  if (typeof window === 'undefined' || !navigator.onLine) return;
+  
+  // Throttle sync per collection to at most once every 3 seconds to avoid spamming
+  const now = Date.now();
+  if (lastSyncTimestamps[colName] && now - lastSyncTimestamps[colName] < 3000) return;
+  lastSyncTimestamps[colName] = now;
+
+  try {
+    const token = safeGetItem('varejopro_auth_token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    }
+
+    let endpoint = '';
+    let responseKey = '';
+
+    if (colName === 'products') {
+      endpoint = '/api/stock/products?limit=300';
+      responseKey = 'products';
+    } else if (colName === 'clients') {
+      endpoint = '/api/clients?limit=200';
+      responseKey = 'clients';
+    } else if (colName === 'cash_registers') {
+      endpoint = '/api/cash-register/current';
+      responseKey = 'cashRegister';
+    } else if (colName === 'sales') {
+      endpoint = '/api/sales?limit=100';
+      responseKey = 'sales';
+    } else if (colName === 'financial_records' || colName === 'finance') {
+      endpoint = '/api/finance/records?limit=100';
+      responseKey = 'records';
+    }
+
+    if (!endpoint) return;
+
+    const res = await fetch(endpoint, { headers });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const colData = getCollectionData(colName);
+    let updated = false;
+
+    if (responseKey === 'cashRegister') {
+      if (data.cashRegister && data.cashRegister.id) {
+        const cr = data.cashRegister;
+        colData[cr.id] = { ...colData[cr.id], ...cr, id: cr.id };
+        updated = true;
+      }
+    } else if (responseKey && Array.isArray(data[responseKey])) {
+      const items: any[] = data[responseKey];
+      for (const item of items) {
+        if (!item.id) continue;
+        colData[item.id] = { ...colData[item.id], ...item };
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      saveCollectionData(colName, colData);
+    }
+  } catch (e) {
+    // Non-blocking sync error
+  }
+}
 
 export class LocalDocRef {
   constructor(public collectionName: string, public id: string) {}
@@ -210,6 +279,10 @@ export async function getDocFromServer(docRef: LocalDocRef) {
 
 export async function getDocs(q: LocalQuery | LocalColRef) {
   const colName = q instanceof LocalQuery ? q.colRef.collectionName : q.collectionName;
+  
+  // Trigger background sync with server PostgreSQL API
+  syncCollectionWithServer(colName).catch(() => {});
+
   const col = getCollectionData(colName);
   let items = Object.entries(col).map(([id, val]) => ({ id, ...val }));
 

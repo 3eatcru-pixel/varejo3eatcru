@@ -34,10 +34,19 @@ export interface CheckoutPayload {
 }
 
 export async function processSaleTransaction(payload: CheckoutPayload): Promise<Sale> {
-  const response = await fetch('/api/sale/create', {
+  const idempotencyKey = payload.idempotencyKey || ('key_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9));
+  const headers = await getHeaders();
+  
+  const response = await fetch('/api/sale/checkout', {
     method: 'POST',
-    headers: await getHeaders(),
-    body: JSON.stringify(payload)
+    headers: {
+      ...headers,
+      'X-Idempotency-Key': idempotencyKey
+    },
+    body: JSON.stringify({
+      ...payload,
+      idempotencyKey
+    })
   });
   
   if (!response.ok) {

@@ -58,6 +58,7 @@ import BarcodeScanner from './BarcodeScanner';
 import PixPaymentModal from './PixPaymentModal';
 import { SaleReceiptModal } from './SaleReceiptModal';
 import { processSaleTransaction, CheckoutPayload } from '../services/SaleService';
+import { fetchProducts } from '../services/ProductService';
 import { OfflineQueueService } from '../services/OfflineQueueService';
 import { SyncEngine } from '../services/offline/SyncEngine';
 import { useToast } from './Toast';
@@ -198,26 +199,12 @@ export default function Checkout({ user, activeRegister, onOpenRegisterRequested
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cart, submitting, isScannerOpen, isReceiptOpen, isPixModalOpen, isMobileCartOpen]);
 
-  // Real-time products listener
+  // Products loader via API
   useEffect(() => {
     if (!user?.companyId) return;
-    const q = query(
-      collection(db, 'products'),
-      where('companyId', '==', user.companyId),
-      limit(500)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const prods: Product[] = [];
-      snapshot.forEach((doc) => {
-        prods.push({ id: doc.id, ...doc.data() } as Product);
-      });
-      setProducts(prods);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'products');
-    });
-
-    return () => unsubscribe();
+    fetchProducts(1, 500)
+      .then(res => setProducts(res.products))
+      .catch(err => console.warn('Erro ao carregar produtos no PDV:', err));
   }, [user?.companyId]);
 
   // Clients listener

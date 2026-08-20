@@ -108,12 +108,13 @@ export const DEFAULT_PERMISSIONS: PermissionsConfig = {
   stock: STOCK_PERMISSIONS
 };
 
-export function normalizeRoleKey(role?: CompanyRole | string): 'admin' | 'manager' | 'cashier' | 'stock' {
+export function normalizeRoleKey(role?: CompanyRole | string): 'admin' | 'manager' | 'cashier' | 'stock' | 'viewer' {
   if (!role) return 'cashier';
   const lower = String(role).toLowerCase();
-  if (lower === 'admin' || lower === CompanyRole.ADMIN || lower === 'owner') return 'admin';
+  if (lower === 'admin' || lower === CompanyRole.ADMIN || lower === 'owner' || lower === CompanyRole.OWNER) return 'admin';
   if (lower === 'gerente' || lower === CompanyRole.MANAGER || lower === 'manager') return 'manager';
   if (lower === 'estoquista' || lower === CompanyRole.STOCK || lower === 'stock') return 'stock';
+  if (lower === 'visualizador' || lower === CompanyRole.VIEWER || lower === 'viewer') return 'viewer';
   return 'cashier';
 }
 
@@ -126,13 +127,16 @@ export function hasPermission(user: UserProfile | null | undefined, key: Permiss
   const roleKey = normalizeRoleKey(user.role);
   if (roleKey === 'admin') return true;
   if (roleKey === 'manager') {
-    return key !== 'manageUsers';
+    return key !== 'manageUsers' && key !== 'manageBilling' && key !== 'manageCompany';
   }
   if (roleKey === 'stock') {
     return key === 'manageStock';
   }
   if (roleKey === 'cashier') {
     return key === 'posAccess';
+  }
+  if (roleKey === 'viewer') {
+    return key === 'viewReports';
   }
   return false;
 }

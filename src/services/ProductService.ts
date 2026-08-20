@@ -1,49 +1,80 @@
-import { collection, doc, addDoc, updateDoc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { Product, UserProfile } from '../types';
 
-export async function createProduct(productData: Partial<Product>, user: UserProfile): Promise<string> {
-  const companyId = user.companyId;
-  if (!companyId) {
-    throw new Error('ID da empresa ausente. Operação com produto negada.');
-  }
-  const payload = {
-    ...productData,
-    companyId,
-    updatedAt: new Date().toISOString()
+async function getHeaders() {
+  const token = localStorage.getItem('varejopro_auth_token') || '';
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
   };
-  const docRef = await addDoc(collection(db, 'products'), payload);
-  return docRef.id;
 }
 
-export async function updateProduct(productId: string, productData: Partial<Product>, user: UserProfile): Promise<void> {
-  if (!user.companyId) {
-    throw new Error('ID da empresa ausente. Operação com produto negada.');
+export async function fetchProducts(page = 1, limit = 100): Promise<{ products: Product[]; total: number; totalPages: number }> {
+  const res = await fetch(`/api/stock/products?page=${page}&limit=${limit}`, {
+    headers: await getHeaders()
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Erro ao carregar produtos.');
   }
-  const payload = {
-    ...productData,
-    updatedAt: new Date().toISOString()
+  const data = await res.json();
+  return {
+    products: data.products || [],
+    total: data.pagination?.total || 0,
+    totalPages: data.pagination?.totalPages || 1
   };
-  await updateDoc(doc(db, 'products', productId), payload);
+}
+
+export async function createProduct(productData: Partial<Product>, _user?: UserProfile): Promise<string> {
+  const res = await fetch('/api/stock/products', {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify(productData)
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Erro ao criar produto.');
+  }
+
+  const data = await res.json();
+  return data.productId || productData.id || '';
+}
+
+export async function updateProduct(productId: string, productData: Partial<Product>, _user?: UserProfile): Promise<void> {
+  const res = await fetch('/api/stock/products', {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ ...productData, id: productId })
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Erro ao atualizar produto.');
+  }
 }
 
 export async function deleteProduct(productId: string): Promise<void> {
-  await deleteDoc(doc(db, 'products', productId));
+  const res = await fetch(`/api/stock/products/${productId}`, {
+    method: 'DELETE',
+    headers: await getHeaders()
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Erro ao remover produto.');
+  }
 }
 
-export async function checkBarcodeExists(barcode: string, companyId: string, excludeProductId?: string): Promise<boolean> {
-  const q = query(
-    collection(db, 'products'), 
-    where('companyId', '==', companyId),
-    where('barcode', '==', barcode)
-  );
-  const snap = await getDocs(q);
-  if (snap.empty) return false;
-  
-  if (excludeProductId) {
-    const docs = snap.docs.filter(doc => doc.id !== excludeProductId);
-    return docs.length > 0;
+export async function checkBarcodeExists(barcode: string, _companyId?: string, excludeProductId?: string): Promise<boolean> {
+  if (!barcode || !barcode.trim()) return false;
+  try {
+    const { products } = await fetchProducts(1, 100);
+    const existing = products.filter(p => p.barcode === barcode.trim());
+    if (excludeProductId) {
+      return existing.some(p => p.id !== excludeProductId);
+    }
+    return existing.length > 0;
+  } catch {
+    return false;
   }
-  
-  return true;
 }

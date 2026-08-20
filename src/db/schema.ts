@@ -65,6 +65,11 @@ export const products = pgTable('products', {
   price: doublePrecision('price').notNull(),
   costPrice: doublePrecision('cost_price'),
   stock: doublePrecision('stock').notNull().default(0),
+  unit: text('unit').default('UN'),
+  minStock: doublePrecision('min_stock').default(0),
+  maxStock: doublePrecision('max_stock'),
+  brand: text('brand'),
+  location: text('location'),
   categoryId: text('category_id'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: text('created_at').notNull(),
@@ -167,13 +172,14 @@ export const sales = pgTable('sales', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull().references(() => companies.id),
   branchId: text('branch_id').references(() => branches.id),
+  deviceId: text('device_id').references(() => devices.id),
   cashRegisterId: text('cash_register_id').references(() => cashRegisters.id),
   userId: text('user_id').notNull().references(() => users.id),
   status: text('status').notNull(), // 'COMPLETED', 'CANCELED'
   subtotal: doublePrecision('subtotal').notNull(),
   discount: doublePrecision('discount').notNull().default(0),
   total: doublePrecision('total').notNull(),
-  paymentMethod: text('payment_method').notNull(), // 'CREDIT', 'DEBIT', 'PIX', 'CASH'
+  paymentMethod: text('payment_method').notNull(), // 'CREDIT', 'DEBIT', 'PIX', 'CASH', 'SPLIT'
   idempotencyKey: text('idempotency_key'),
   createdAt: text('created_at').notNull(),
 }, (table) => ({
@@ -189,6 +195,16 @@ export const saleItems = pgTable('sale_items', {
   quantity: doublePrecision('quantity').notNull(),
   unitPrice: doublePrecision('unit_price').notNull(),
   totalPrice: doublePrecision('total_price').notNull(),
+});
+
+export const salePayments = pgTable('sale_payments', {
+  id: text('id').primaryKey(),
+  saleId: text('sale_id').notNull().references(() => sales.id),
+  method: text('method').notNull(), // 'CASH', 'CREDIT', 'DEBIT', 'PIX'
+  amount: doublePrecision('amount').notNull(),
+  cashReceived: doublePrecision('cash_received'),
+  changeGiven: doublePrecision('change_given'),
+  createdAt: text('created_at').notNull(),
 });
 
 export const fiscalDocuments = pgTable('fiscal_documents', {
@@ -253,12 +269,17 @@ export const salesRelations = relations(sales, ({ one, many }) => ({
   company: one(companies, { fields: [sales.companyId], references: [companies.id] }),
   user: one(users, { fields: [sales.userId], references: [users.id] }),
   items: many(saleItems),
+  payments: many(salePayments),
   cashRegister: one(cashRegisters, { fields: [sales.cashRegisterId], references: [cashRegisters.id] })
 }));
 
 export const saleItemsRelations = relations(saleItems, ({ one }) => ({
   sale: one(sales, { fields: [saleItems.saleId], references: [sales.id] }),
   product: one(products, { fields: [saleItems.productId], references: [products.id] })
+}));
+
+export const salePaymentsRelations = relations(salePayments, ({ one }) => ({
+  sale: one(sales, { fields: [salePayments.saleId], references: [sales.id] })
 }));
 
 // --- PLATFORM ADMIN (HQ) ---

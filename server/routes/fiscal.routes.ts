@@ -174,10 +174,12 @@ const issueDocumentHandler = async (req: express.Request, res: express.Response)
       }
     });
 
-    logAuditEvent(companyId, uid, 'FISCAL_DOCUMENT_ISSUED', `NFC-e autorizada para venda ${sale.id}. Protocolo: ${protocol}, Chave: ${accessKey}`, req);
+    logAuditEvent(companyId, uid, 'FISCAL_DOCUMENT_ISSUED', `NFC-e emitida [MODO SIMULAÇÃO/HOMOLOGAÇÃO] para venda ${sale.id}. Protocolo: ${protocol}, Chave: ${accessKey}`, req);
 
     return res.json({
       success: true,
+      isSimulation: true,
+      simulationNotice: "SIMULAÇÃO / MODO HOMOLOGAÇÃO - NÃO É DOCUMENTO FISCAL AUTORIZADO SEFAZ",
       document: {
         id: docId,
         saleId: sale.id,
@@ -185,6 +187,8 @@ const issueDocumentHandler = async (req: express.Request, res: express.Response)
         status: docData.status,
         protocol,
         accessKey,
+        isSimulation: true,
+        environment: "HOMOLOGACAO_SIMULADA",
         createdAt: nowIso
       }
     });

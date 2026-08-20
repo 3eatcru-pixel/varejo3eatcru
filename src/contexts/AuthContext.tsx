@@ -244,8 +244,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    const token = localStorage.getItem('varejopro_auth_token');
+    if (token) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } catch (err) {
+        // non-blocking
+      }
+    }
+
     localStorage.removeItem('varejopro_auth_token');
     localStorage.removeItem('varejopro_profile');
+    localStorage.removeItem('varejopro_support_session');
     
     setUserProfile(null);
     setAccount(null);

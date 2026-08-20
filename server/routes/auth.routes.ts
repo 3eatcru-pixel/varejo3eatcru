@@ -368,12 +368,9 @@ router.post('/api/auth/reset-password', async (req, res) => {
     });
 
     const resetLink = `${req.protocol}://${req.get('host') || 'localhost:3000'}/reset-password?token=${rawToken}`;
-    console.log(`\n==================================================`);
-    console.log(`[AUTH SECURITY SHIELD] Password Reset Request for ${email}`);
-    console.log(`Token: ${rawToken}`);
-    console.log(`Link: ${resetLink}`);
-    console.log(`Expires: ${expiresAt}`);
-    console.log(`==================================================\n`);
+    if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_LOGS === 'true') {
+      console.log(`[AUTH] Password reset requested for ${email}`);
+    }
 
     return res.json({ 
       success: true, 
@@ -607,6 +604,21 @@ router.post('/api/auth/invitations/accept', async (req, res) => {
   } catch (error: any) {
     console.error('Erro ao aceitar convite:', error);
     return res.status(400).json({ error: error.message || 'Erro ao processar convite.' });
+  }
+});
+
+// Logout endpoint (Revokes current session server-side)
+router.post('/api/auth/logout', requireApiAuth, async (req, res) => {
+  try {
+    const userProfile = (req as any).userProfile;
+    if (userProfile?.uid) {
+      await db.update(users)
+        .set({ tokenVersion: sql`${users.tokenVersion} + 1` })
+        .where(eq(users.id, userProfile.uid));
+    }
+    return res.json({ success: true, message: 'Sessão encerrada com sucesso.' });
+  } catch (error: any) {
+    return res.json({ success: true, message: 'Sessão encerrada localmente.' });
   }
 });
 

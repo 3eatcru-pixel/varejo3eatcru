@@ -24,6 +24,7 @@ import { Product, MovementType, UserProfile } from '../../../types';
 import { formatCurrency } from '../../../lib/utils';
 import { hasPermission } from '../../../lib/permissions';
 import { adjustStock } from '../../../services/StockService';
+import { fetchProducts } from '../../../services/ProductService';
 
 export default function StockAdjustments({ user }: { user?: UserProfile }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -42,19 +43,11 @@ export default function StockAdjustments({ user }: { user?: UserProfile }) {
   const canAdjust = hasPermission(user, 'manageStock');
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'products'),
-      where('companyId', '==', companyId)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Product))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      setProducts(data);
-    }, (err) => {
-      console.warn('Erro ao carregar produtos em ajustes:', err);
-    });
-    return () => unsubscribe();
+    if (companyId) {
+      fetchProducts(1, 300)
+        .then(res => setProducts(res.products.sort((a, b) => a.name.localeCompare(b.name))))
+        .catch(err => console.warn('Erro ao carregar produtos da API em ajustes:', err));
+    }
   }, [companyId]);
 
   const handleSelectProduct = (prod: Product) => {

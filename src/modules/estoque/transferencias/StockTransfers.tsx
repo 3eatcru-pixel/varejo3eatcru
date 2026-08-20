@@ -18,6 +18,7 @@ import {
 import { db } from '../../../lib/firebase';
 import { Product, UserProfile } from '../../../types';
 import { transferStock } from '../../../services/StockService';
+import { fetchProducts } from '../../../services/ProductService';
 
 export default function StockTransfers({ user }: { user?: UserProfile }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -36,19 +37,11 @@ export default function StockTransfers({ user }: { user?: UserProfile }) {
   const companyId = user?.companyId || '';
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'products'),
-      where('companyId', '==', companyId)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs
-        .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Product))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      setProducts(data);
-    }, (err) => {
-      console.warn('Erro ao carregar produtos em transferências:', err);
-    });
-    return () => unsubscribe();
+    if (companyId) {
+      fetchProducts(1, 300)
+        .then(res => setProducts(res.products.sort((a, b) => a.name.localeCompare(b.name))))
+        .catch(err => console.warn('Erro ao carregar produtos da API em transferências:', err));
+    }
   }, [companyId]);
 
   const handleTransfer = async (e: React.FormEvent) => {

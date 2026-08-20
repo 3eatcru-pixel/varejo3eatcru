@@ -192,10 +192,11 @@ export const requireApiAuth = async (req: Request, res: Response, next: NextFunc
     }
 
     const rawRole = (membershipDb?.role || (isPlatformAdmin ? 'ADMIN' : 'CASHIER')).toUpperCase();
-    const resolvedRole: CompanyRole = rawRole === 'OWNER' ? CompanyRole.OWNER : rawRole === 'ADMIN' 
-      ? CompanyRole.ADMIN 
-      : rawRole === 'MANAGER' || rawRole === 'GERENTE' 
-      ? CompanyRole.MANAGER 
+    const resolvedRole: CompanyRole = rawRole === 'OWNER' ? CompanyRole.OWNER 
+      : rawRole === 'ADMIN' ? CompanyRole.ADMIN 
+      : rawRole === 'MANAGER' || rawRole === 'GERENTE' ? CompanyRole.MANAGER 
+      : rawRole === 'STOCK' || rawRole === 'ESTOQUE' || rawRole === 'ESTOQUISTA' ? CompanyRole.STOCK
+      : rawRole === 'VIEWER' || rawRole === 'VISUALIZADOR' ? CompanyRole.VIEWER
       : CompanyRole.CASHIER;
 
     const authData: AuthenticatedUser = {

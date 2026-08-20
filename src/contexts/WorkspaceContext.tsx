@@ -31,8 +31,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { firebaseUser, userProfile, refreshProfile } = useAuth();
   const [workspaces, setWorkspaces] = useState<CompanyWorkspace[]>([]);
   const [activeWorkspace, setActiveWorkspace] = useState<CompanyWorkspace | null>(null);
-  const [activeBranchId, setActiveBranchId] = useState<string>('MATRIZ');
-  const [activeTerminalId, setActiveTerminalId] = useState<string>('PDV-01');
+  const [activeBranchId, setActiveBranchId] = useState<string>(() => userProfile?.branchId || '');
+  const [activeTerminalId, setActiveTerminalId] = useState<string>(() => userProfile?.terminalId || '');
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
   const [supportSession, setSupportSession] = useState<SupportSessionData | null>(() => {
     try {
@@ -50,8 +50,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return null;
   });
 
+  const getAuthToken = (): string => {
+    return localStorage.getItem('varejopro_auth_token') || '';
+  };
+
   const fetchWorkspaces = async () => {
-    if (!firebaseUser) {
+    const token = getAuthToken();
+    if (!userProfile && !token) {
       setWorkspaces([]);
       setActiveWorkspace(null);
       return;
@@ -59,10 +64,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     setLoadingWorkspaces(true);
     try {
-      const idToken = await firebaseUser.getIdToken();
       const res = await fetch('/api/account/workspaces', {
         headers: { 
-          Authorization: `Bearer ${idToken}`,
+          Authorization: `Bearer ${token}`,
           ...(supportSession ? { 'x-support-session-id': supportSession.id } : {})
         }
       });
@@ -104,13 +108,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, [firebaseUser, userProfile?.companyId, supportSession?.id]);
 
   const switchWorkspace = async (companyId: string, branchId?: string, terminalId?: string) => {
-    if (!firebaseUser) return;
-    const idToken = await firebaseUser.getIdToken();
+    const token = getAuthToken();
+    if (!token) return;
     const res = await fetch('/api/account/workspaces/switch', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${idToken}`,
+        Authorization: `Bearer ${token}`,
         ...(supportSession ? { 'x-support-session-id': supportSession.id } : {})
       },
       body: JSON.stringify({ companyId, branchId, terminalId })
@@ -131,13 +135,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   };
 
   const createWorkspace = async (data: { name: string; tradeName?: string; cnpj?: string; phone?: string; email?: string }) => {
-    if (!firebaseUser) return;
-    const idToken = await firebaseUser.getIdToken();
+    const token = getAuthToken();
+    if (!token) return;
     const res = await fetch('/api/account/workspaces/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${idToken}`
+        Authorization: `Bearer ${token}`
       },
       body: JSON.stringify(data)
     });
@@ -152,13 +156,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   };
 
   const startSupportSession = async (targetCompanyId: string, reason: string, durationMinutes = 30) => {
-    if (!firebaseUser) return;
-    const idToken = await firebaseUser.getIdToken();
+    const token = getAuthToken();
+    if (!token) return;
     const res = await fetch('/api/hq/support-session/start', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${idToken}`
+        Authorization: `Bearer ${token}`
       },
       body: JSON.stringify({ targetCompanyId, reason, durationMinutes })
     });

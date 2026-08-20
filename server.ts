@@ -45,11 +45,18 @@ async function startServer() {
     // Secure Referrer Policy
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     
-    // Explicit production-grade CORS configuration
-    const origin = req.headers.origin || '*';
-    res.setHeader('Access-Control-Allow-Origin', origin === 'null' ? '*' : origin);
+    // Explicit production-grade CORS configuration with whitelist check
+    const reqOrigin = req.headers.origin;
+    const isAllowedOrigin = !reqOrigin || 
+      reqOrigin.includes('localhost') || 
+      reqOrigin.includes('127.0.0.1') || 
+      reqOrigin.endsWith('.ai.studio') || 
+      reqOrigin.endsWith('.run.app') || 
+      reqOrigin.includes('3eatcruvarejo');
+    
+    res.setHeader('Access-Control-Allow-Origin', isAllowedOrigin && reqOrigin ? reqOrigin : 'https://3eatcruvarejo.ai.studio');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Idempotency-Key');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Idempotency-Key, x-idempotency-key, x-access-token');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
 
     if (req.method === 'OPTIONS') {

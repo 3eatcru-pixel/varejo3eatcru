@@ -186,49 +186,70 @@ router.post(["/api/stock/adjust", "/api/stock/movement"], requireApiAuth, requir
 
     const companyId = userProfile.companyId;
     const uid = userProfile.uid || userProfile.id;
-    const { productId, delta, type = 'IN', reason = 'Ajuste manual de estoque' } = req.body;
+    const body = req.body || {};
 
-    if (!productId) return res.status(400).json({ error: "ID do produto é obrigatório." });
-    
-    const numDelta = Number(delta);
-    if (!Number.isFinite(numDelta) || numDelta === 0) {
-      return res.status(400).json({ error: "Informe uma quantidade de ajuste válida (número diferente de zero)." });
-    }
+    const targetProductId = body.productId || body.product?.id;
+    if (!targetProductId) return res.status(400).json({ error: "ID do produto é obrigatório." });
+
+    const adjustmentType = String(body.adjustmentType || body.operation || body.type || 'IN').toUpperCase();
+    const qtyVal = Number(body.qtyVal ?? body.quantity ?? body.delta ?? 0);
+    const reason = String(body.reason || "Ajuste manual de estoque");
 
     const nowIso = new Date().toISOString();
 
-    await db.transaction(async (tx) => {
-      // Atomic adjustment to prevent race conditions
-      const updatedRows = await tx.update(products)
-        .set({ 
-          stock: sql`${products.stock} + ${numDelta}`, 
-          updatedAt: nowIso 
-        })
-        .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
-        .returning({ id: products.id, stock: products.stock });
+    const resultingStock = await db.transaction(async (tx) => {
+      const existingProds = await tx.select().from(products)
+        .where(and(eq(products.id, targetProductId), eq(products.companyId, companyId)))
+        .for('update');
 
-      if (updatedRows.length === 0) {
-        throw new Error("Produto não encontrado.");
+      if (!existingProds.length) throw new Error("Produto não encontrado.");
+
+      const currentStock = Number(existingProds[0].stock) || 0;
+      let calculatedDelta = 0;
+
+      if (adjustmentType === 'SET') {
+        calculatedDelta = qtyVal - currentStock;
+      } else if (adjustmentType === 'REMOVE' || adjustmentType === 'OUT') {
+        calculatedDelta = -Math.abs(qtyVal);
+      } else if (adjustmentType === 'ADD' || adjustmentType === 'IN') {
+        calculatedDelta = Math.abs(qtyVal);
+      } else {
+        calculatedDelta = Number(body.delta) || qtyVal;
       }
+
+      if (calculatedDelta === 0) {
+        return currentStock;
+      }
+
+      const newStock = currentStock + calculatedDelta;
+      if (newStock < 0) {
+        throw new Error(`Saldo de estoque resultante não pode ser negativo (${newStock.toFixed(2)}). Saldo atual: ${currentStock.toFixed(2)}.`);
+      }
+
+      await tx.update(products)
+        .set({ stock: newStock, updatedAt: nowIso })
+        .where(and(eq(products.id, targetProductId), eq(products.companyId, companyId)));
 
       await tx.insert(inventoryMovements).values({
         id: randomUUID(),
         companyId,
-        productId,
+        productId: targetProductId,
         userId: uid,
-        type: String(type).toUpperCase(),
-        quantity: numDelta,
+        type: adjustmentType,
+        quantity: calculatedDelta,
         referenceId: reason,
         createdAt: nowIso
       });
+
+      return newStock;
     });
 
-    logAuditEvent(companyId, uid, 'STOCK_ADJUSTED', `Ajuste de estoque: ${numDelta} unidades no produto ${productId}`, req);
+    logAuditEvent(companyId, uid, 'STOCK_ADJUSTED', `Ajuste de estoque (${adjustmentType}) no produto ${targetProductId}`, req);
 
-    return res.json({ success: true, message: "Estoque ajustado com sucesso." });
+    return res.json({ success: true, message: "Estoque ajustado com sucesso.", resultingStock });
   } catch (error: any) {
     console.error("Erro ao ajustar estoque:", error);
-    return res.status(500).json({ error: error.message || "Erro ao ajustar estoque." });
+    return res.status(400).json({ error: error.message || "Erro ao ajustar estoque." });
   }
 });
 

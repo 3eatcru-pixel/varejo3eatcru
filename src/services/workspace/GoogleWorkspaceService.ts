@@ -1,6 +1,8 @@
 import { TokenManager, GoogleAuthSession } from './TokenManager';
 import { DriveService, DriveItem, WorkspaceFolderStructure } from './DriveService';
 import { DocsService, GoogleDoc } from './DocsService';
+import { SheetsService } from './SheetsService';
+import { GmailService } from './GmailService';
 import { OfflineWorkspaceQueue, WorkspaceQueueItem, WorkspaceOpType } from './OfflineWorkspaceQueue';
 
 export class GoogleWorkspaceService {
@@ -14,7 +16,9 @@ export class GoogleWorkspaceService {
         name: 'Gestor Google Workspace',
         scopes: [
           'https://www.googleapis.com/auth/drive.file',
-          'https://www.googleapis.com/auth/documents'
+          'https://www.googleapis.com/auth/documents',
+          'https://www.googleapis.com/auth/spreadsheets',
+          'https://mail.google.com/'
         ],
         expiresAt: Date.now() + 3600 * 1000, // 1 hour validity
         connectedAt: new Date().toISOString()
@@ -98,6 +102,48 @@ export class GoogleWorkspaceService {
     return DocsService.generateSalesExecutiveDoc(token, companyName, stats, folderId);
   }
 
+  // --- Sheets Operations ---
+  static async exportSalesToSheet(
+    companyName: string,
+    sales: any[],
+    folderId?: string
+  ): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
+    const token = await TokenManager.getValidAccessToken();
+    if (!token) throw new Error("Google Workspace não conectado.");
+    return SheetsService.exportSalesToSheet(token, companyName, sales, folderId);
+  }
+
+  static async exportStockToSheet(
+    companyName: string,
+    products: any[],
+    folderId?: string
+  ): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
+    const token = await TokenManager.getValidAccessToken();
+    if (!token) throw new Error("Google Workspace não conectado.");
+    return SheetsService.exportStockToSheet(token, companyName, products, folderId);
+  }
+
+  // --- Gmail Operations ---
+  static async sendSaleReceiptEmail(
+    recipientEmail: string,
+    companyName: string,
+    saleData: any
+  ): Promise<{ id: string; threadId: string }> {
+    const token = await TokenManager.getValidAccessToken();
+    if (!token) throw new Error("Google Workspace não conectado.");
+    return GmailService.sendSaleReceiptEmail(token, recipientEmail, companyName, saleData);
+  }
+
+  static async sendCashClosingAlertEmail(
+    recipientEmail: string,
+    companyName: string,
+    closingData: any
+  ): Promise<{ id: string; threadId: string }> {
+    const token = await TokenManager.getValidAccessToken();
+    if (!token) throw new Error("Google Workspace não conectado.");
+    return GmailService.sendCashClosingAlertEmail(token, recipientEmail, companyName, closingData);
+  }
+
   // --- Offline Queuing & Background Sync ---
   static async queueOfflineWorkspaceAction(
     companyId: string,
@@ -121,3 +167,4 @@ export class GoogleWorkspaceService {
     return OfflineWorkspaceQueue.getQueue(companyId);
   }
 }
+
