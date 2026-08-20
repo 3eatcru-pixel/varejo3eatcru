@@ -1,0 +1,330 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Perfil do operador do sistema e função de acesso.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "InventorySettings": {
+      "title": "InventorySettings",
+      "description": "Configurações globais de estoque, setores, tags e categorias.",
+      "type": "object",
+      "properties": {
+        "sectors": { "type": "array" },
+        "tags": { "type": "array" },
+        "categories": { "type": "array" }
+      }
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Item de produto cadastrado no catálogo.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "barcode": { "type": "string" },
+        "sku": { "type": "string" },
+        "price": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "stock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "unit": { "type": "string" },
+        "category": { "type": "string" },
+        "sector": { "type": "string" },
+        "brand": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "location": { "type": "string" },
+        "tags": { "type": "array" },
+        "imageUrl": { "type": "string" },
+        "fiscalData": { "type": "object" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["name", "price", "stock", "category"]
+    },
+    "CashRegister": {
+      "title": "CashRegister",
+      "description": "Sessão e turno de caixa do terminal POS.",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "openedAt": { "type": "string" },
+        "openedByUid": { "type": "string" },
+        "openedByName": { "type": "string" },
+        "initialBalance": { "type": "number" },
+        "finalBalanceCalculated": { "type": "number" },
+        "finalBalanceDeclared": { "type": "number" },
+        "cashDifference": { "type": "number" },
+        "operations": { "type": "array" },
+        "totalsByPaymentMethod": { "type": "object" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["status", "openedByUid", "initialBalance"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Registro de transação de venda efetuada no PDV.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "cashierName": { "type": "string" },
+        "cashierUid": { "type": "string" },
+        "cashRegisterId": { "type": "string" },
+        "status": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["code", "subtotal", "total", "paymentMethod", "cashierName", "status"]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Log de auditoria de movimentação física de estoque.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "previousStock": { "type": "number" },
+        "quantityDelta": { "type": "number" },
+        "newStock": { "type": "number" },
+        "type": { "type": "string" },
+        "reason": { "type": "string" },
+        "operatorUid": { "type": "string" },
+        "operatorName": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["productId", "productName", "previousStock", "quantityDelta", "newStock", "type"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Cadastro de clientes para fidelização e vendas.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "cpfCnpj": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Cadastro de fornecedores de mercadorias.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "FinancialRecord": {
+      "title": "FinancialRecord",
+      "description": "Lançamento de contas a pagar e receber.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "dueDate": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["type", "description", "amount", "dueDate", "category", "status"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Registro de compras e entrada de notas.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "totalCost": { "type": "number" },
+        "items": { "type": "array" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["code", "supplierId", "supplierName", "totalCost"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Trilha de auditoria e segurança de eventos.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "module": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["userId", "action", "module", "timestamp"]
+    },
+    "FiscalDocument": {
+      "title": "FiscalDocument",
+      "description": "Documentos fiscais emitidos (NFC-e/NF-e).",
+      "type": "object",
+      "properties": {
+        "saleId": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "protocol": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["saleId", "type", "status", "createdAt"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "Entidade de identidade base da conta (Firebase Auth).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "emailVerified": { "type": "boolean" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "status"]
+    },
+    "PersonalProfile": {
+      "title": "PersonalProfile",
+      "description": "Dados pessoais e preferências do usuário.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "preferredName": { "type": "string" },
+        "phone": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "language": { "type": "string" },
+        "timezone": { "type": "string" }
+      },
+      "required": ["uid", "fullName"]
+    },
+    "CompanyMembership": {
+      "title": "CompanyMembership",
+      "description": "Vínculo multi-tenant de usuário com empresa e cargo operacional.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "companyId": { "type": "string" },
+        "role": { "type": "string" },
+        "permissions": { "type": "object" },
+        "branchIds": { "type": "array" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "userId", "companyId", "role", "status"]
+    },
+    "PlatformAdmin": {
+      "title": "PlatformAdmin",
+      "description": "Acesso administrativo mestre ao Command Center HQ.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "active": { "type": "boolean" },
+        "isLeadDeveloper": { "type": "boolean" }
+      },
+      "required": ["uid", "email", "role", "active"]
+    },
+    "CompanyBranding": {
+      "title": "CompanyBranding",
+      "description": "Identidade visual, logos e customização white-label da empresa.",
+      "type": "object",
+      "properties": {
+        "companyId": { "type": "string" },
+        "name": { "type": "string" },
+        "colors": { "type": "object" },
+        "appearance": { "type": "object" },
+        "branding": { "type": "object" }
+      },
+      "required": ["companyId", "name", "colors"]
+    }
+  },
+  "firestore": {
+    "/company_branding/{companyId}": {
+      "schema": { "$ref": "#/entities/CompanyBranding" },
+      "description": "Identidade visual e white-label da empresa"
+    },
+    "/accounts/{userId}": {
+      "schema": { "$ref": "#/entities/Account" },
+      "description": "Contas de identidade base"
+    },
+    "/profiles/{userId}": {
+      "schema": { "$ref": "#/entities/PersonalProfile" },
+      "description": "Perfis pessoais de usuários"
+    },
+    "/company_memberships/{membershipId}": {
+      "schema": { "$ref": "#/entities/CompanyMembership" },
+      "description": "Associações multi-tenant entre usuários e empresas"
+    },
+    "/platform_admins/{adminId}": {
+      "schema": { "$ref": "#/entities/PlatformAdmin" },
+      "description": "Administradores mestres da plataforma SaaS HQ"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Perfil de acesso dos usuários do sistema"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/InventorySettings" },
+      "description": "Configurações do sistema"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Coleção de produtos cadastrados"
+    },
+    "/cash_registers/{cashRegisterId}": {
+      "schema": { "$ref": "#/entities/CashRegister" },
+      "description": "Turnos e sessões de caixa do PDV"
+    },
+    "/sales/{saleId}": {
+      "schema": { "$ref": "#/entities/Sale" },
+      "description": "Coleção de vendas do PDV"
+    },
+    "/stock_movements/{movementId}": {
+      "schema": { "$ref": "#/entities/StockMovement" },
+      "description": "Histórico de auditoria de estoque"
+    },
+    "/clients/{clientId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Coleção de clientes cadastrados"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": { "$ref": "#/entities/Supplier" },
+      "description": "Coleção de fornecedores parceiros"
+    },
+    "/financial_records/{recordId}": {
+      "schema": { "$ref": "#/entities/FinancialRecord" },
+      "description": "Contas a pagar e receber do financeiro"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/Purchase" },
+      "description": "Pedidos de compra e notas de entrada"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Logs de auditoria e segurança"
+    },
+    "/fiscal_documents/{docId}": {
+      "schema": { "$ref": "#/entities/FiscalDocument" },
+      "description": "Documentos fiscais emitidos"
+    }
+  }
+}

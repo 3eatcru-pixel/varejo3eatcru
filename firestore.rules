@@ -1,0 +1,222 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    
+    function isPlatformAdmin() { 
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/platform_admins/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/platform_admins/$(request.auth.uid)).data.active == true; 
+    }
+
+    function hasUserData() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() { 
+      return hasUserData() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data : null; 
+    }
+
+    function userRole() { 
+      return hasUserData() ? getUserData().role : (isPlatformAdmin() ? 'admin' : 'none'); 
+    }
+
+    function userCompanyId() { 
+      return hasUserData() ? getUserData().companyId : 'none'; 
+    }
+
+    function isSystemAdmin() { return userRole() == 'OWNER' || userRole() == 'ADMIN' || isPlatformAdmin(); }
+    function isManager() { return userRole() == 'gerente' || userRole() == 'manager'; }
+    function isSameCompany(companyId) { return companyId != null && companyId != '' && (companyId == userCompanyId() || isPlatformAdmin()); }
+    
+    // Canonical Role-Based Security Policy (RBAC)
+    function hasPermission(permissionKey) {
+      return isSystemAdmin() || 
+             (isManager() && (permissionKey == 'posAccess' || permissionKey == 'giveDiscount' || permissionKey == 'cancelSale' || permissionKey == 'viewReports' || permissionKey == 'manageStock' || permissionKey == 'manageFinancial')) || 
+             ((userRole() == 'caixa' || userRole() == 'cashier') && permissionKey == 'posAccess');
+    }
+
+    // 1. USERS COLLECTION
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSameCompany(resource.data.companyId) || isSystemAdmin());
+      allow write: if isSignedIn() && (request.auth.uid == userId || isSystemAdmin());
+    }
+
+    // 1.1 ACCOUNTS COLLECTION (Base Identity)
+    match /accounts/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSystemAdmin());
+      allow write: if isSignedIn() && (request.auth.uid == userId || isSystemAdmin());
+    }
+
+    // 1.2 PROFILES COLLECTION (Personal Details)
+    match /profiles/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSystemAdmin());
+      allow write: if isSignedIn() && (request.auth.uid == userId || isSystemAdmin());
+    }
+
+    // 1.3 COMPANY MEMBERSHIPS COLLECTION
+    match /company_memberships/{membershipId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isSameCompany(resource.data.companyId) || isSystemAdmin());
+      allow write: if isSignedIn() && isSystemAdmin();
+    }
+
+    // 1.4 STORES / WORKSPACES COLLECTION
+    match /stores/{storeId} {
+      allow read: if isSignedIn() && (isSameCompany(storeId) || isSystemAdmin());
+      allow write: if isSignedIn() && isSystemAdmin();
+    }
+
+    // 1.5 PLATFORM ADMINS COLLECTION (Strict Read & Write Protection)
+    match /platform_admins/{adminId} {
+      allow read: if isSignedIn() && (request.auth.uid == adminId || isPlatformAdmin());
+      allow write: if isSignedIn() && isPlatformAdmin();
+    }
+
+    // 1.6 USER INVITATIONS COLLECTION
+    match /user_invitations/{invitationId} {
+      allow read: if isSignedIn() && (isSameCompany(resource.data.companyId) || isSystemAdmin());
+      allow write: if isSignedIn() && (isSystemAdmin() || isManager());
+    }
+
+    // 1.7 COMPANY BRANDING COLLECTION
+    match /company_branding/{companyId} {
+      allow read: if isSignedIn() && (isSameCompany(companyId) || isSystemAdmin());
+      allow create, update: if isSignedIn() && isSameCompany(companyId) && (isSystemAdmin() || isManager());
+      allow delete: if isSignedIn() && isSystemAdmin() && isSameCompany(companyId);
+    }
+
+    // 1.8 PULSE QR CODES & ANALYTICS
+    match /pulse_qrcodes/{qrId} {
+      allow read: if true; // Public access for resolving QR Code
+      allow create, update, delete: if isSignedIn() && (isSameCompany(request.resource.data.companyId) || isSystemAdmin());
+    }
+
+    match /pulse_analytics/{analyticId} {
+      allow read: if isSignedIn() && (isSameCompany(resource.data.companyId) || isSystemAdmin());
+      allow create: if true; // Public recording of scan events
+    }
+
+    // 2. PRODUCTS COLLECTION
+    match /products/{productId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId);
+      allow create: if isSignedIn() && (hasPermission('manageStock') || isSystemAdmin()) && isSameCompany(request.resource.data.companyId);
+      allow update: if isSignedIn() && isSameCompany(resource.data.companyId) && isSameCompany(request.resource.data.companyId) && (
+        (isSystemAdmin() || hasPermission('manageStock')) || 
+        (hasPermission('posAccess') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updatedAt']))
+      );
+      allow delete: if isSignedIn() && (isSystemAdmin() || hasPermission('manageStock')) && isSameCompany(resource.data.companyId);
+    }
+
+    // 3. SALES COLLECTION
+    match /sales/{saleId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('posAccess') || hasPermission('viewReports') || isSystemAdmin());
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 3.1 SALE IDEMPOTENCY
+    match /sale_idempotency/{key} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId);
+      allow create: if isSignedIn() && hasPermission('posAccess') && isSameCompany(request.resource.data.companyId);
+      allow update, delete: if false;
+    }
+
+    // 3.2 REFUND IDEMPOTENCY
+    match /refund_idempotency/{key} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId);
+      allow create: if isSignedIn() && hasPermission('posAccess') && isSameCompany(request.resource.data.companyId);
+      allow update, delete: if false;
+    }
+
+    // 4. CASH REGISTERS COLLECTION
+    match /cash_registers/{registerId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('posAccess') || hasPermission('manageFinancial') || isSystemAdmin());
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 5. COMPANY CASH LOCKS COLLECTION
+    match /company_cash_locks/{companyId} {
+      allow read: if isSignedIn() && isSameCompany(companyId);
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 6. STOCK MOVEMENTS COLLECTION
+    match /stock_movements/{movementId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('manageStock') || isSystemAdmin());
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 7. STOCK TRANSFERS COLLECTION
+    match /stock_transfers/{transferId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('manageStock') || isSystemAdmin());
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 8. PURCHASES COLLECTION
+    match /purchases/{purchaseId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('manageStock') || isSystemAdmin());
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 9. SUPPLIERS COLLECTION
+    match /suppliers/{supplierId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('manageStock') || isSystemAdmin());
+      allow create: if isSignedIn() && hasPermission('manageStock') && isSameCompany(request.resource.data.companyId);
+      allow update: if isSignedIn() && hasPermission('manageStock') && isSameCompany(resource.data.companyId) && resource.data.companyId == request.resource.data.companyId;
+      allow delete: if isSignedIn() && isSystemAdmin() && isSameCompany(resource.data.companyId);
+    }
+
+    // 10. CLIENTS COLLECTION
+    match /clients/{clientId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('posAccess') || isSystemAdmin());
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 11. FINANCIAL RECORDS COLLECTION
+    match /financial_records/{recordId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('manageFinancial') || isSystemAdmin());
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 12. REFUNDS COLLECTION
+    match /refunds/{refundId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (hasPermission('manageFinancial') || isSystemAdmin());
+      allow create, update, delete: if false; // Deny direct write, force backend API
+    }
+
+    // 13. SETTINGS COLLECTION
+    match /settings/{settingDoc} {
+      allow read, write: if isSignedIn() && isSystemAdmin();
+    }
+
+    // 14. AUDIT LOGS COLLECTION
+    match /audit_logs/{logId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && isSystemAdmin();
+      allow create: if isSignedIn() && isSameCompany(request.resource.data.companyId) && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // 15. FISCAL DOCUMENTS COLLECTION
+    match /fiscal_documents/{docId} {
+      allow read: if isSignedIn() && isSameCompany(resource.data.companyId) && (isSystemAdmin() || isManager());
+      allow create: if isSignedIn() && isSameCompany(request.resource.data.companyId) && (isSystemAdmin() || isManager());
+      allow update, delete: if false;
+    }
+
+    // 16. BRANCHES COLLECTION
+    match /branches/{branchId} {
+      allow read: if isSignedIn() && (isSameCompany(resource.data.companyId) || isSystemAdmin());
+      allow write: if isSignedIn() && isSystemAdmin();
+    }
+
+    // 17. TERMINALS COLLECTION
+    match /terminals/{terminalId} {
+      allow read: if isSignedIn() && (isSameCompany(resource.data.companyId) || isSystemAdmin());
+      allow write: if isSignedIn() && isSystemAdmin();
+    }
+
+    // Default catch-all denies everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

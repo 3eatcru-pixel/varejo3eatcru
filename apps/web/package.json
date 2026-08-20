@@ -1,0 +1,15 @@
+{
+  "name": "@varejopro/web",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@varejopro/types": "*",
+    "@varejopro/permissions": "*",
+    "@varejopro/domain": "*",
+    "@varejopro/auth": "*",
+    "@varejopro/offline": "*",
+    "@varejopro/sync": "*",
+    "@varejopro/api-client": "*",
+    "@varejopro/ui": "*"
+  }
+}

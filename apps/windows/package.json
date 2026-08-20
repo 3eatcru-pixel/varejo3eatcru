@@ -1,0 +1,7 @@
+{
+  "name": "@varejopro/windows",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VarejoPro Desktop Launcher and Hardware Bridge for Windows",
+  "main": "index.js"
+}

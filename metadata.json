@@ -1,0 +1,10 @@
+{
+  "name": "3eatcru Varejo POS",
+  "description": "V10.2 Core Foundation - Sistema de ponto de venda com fonte única de verdade em banco relacional, segurança robusta, precificação autoritativa e idempotência no PDV.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@varejopro/hq",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@varejopro/types": "*",
+    "@varejopro/permissions": "*",
+    "@varejopro/api-client": "*",
+    "@varejopro/ui": "*"
+  }
+}

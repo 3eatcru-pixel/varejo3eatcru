@@ -1,0 +1,39 @@
+{
+  "name": "VarejoPro POS - Sistema de Vendas e Gestão",
+  "short_name": "VarejoPro",
+  "description": "Sistema Completo de Frente de Caixa (PDV), Gestão de Estoque e Finanças Multi-Tenant",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Frente de Caixa (PDV)",
+      "short_name": "PDV",
+      "description": "Abrir frente de caixa para registrar vendas",
+      "url": "/?tab=vendas_pos"
+    },
+    {
+      "name": "Consultar Estoque",
+      "short_name": "Estoque",
+      "description": "Verificar produtos e inventário",
+      "url": "/?tab=estoque_inventario"
+    }
+  ]
+}

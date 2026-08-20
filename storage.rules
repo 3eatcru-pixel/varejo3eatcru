@@ -1,0 +1,32 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check authentication
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper to validate image file types and size (max 5MB)
+    function isValidImage() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Company Branding files: /branding/{companyId}/{fileName}
+    match /branding/{companyId}/{allPaths=**} {
+      allow read: if true; // Publicly readable for storefront/ERP rendering
+      allow write: if isAuthenticated() && isValidImage();
+    }
+
+    // Product images: /products/{companyId}/{allPaths=**}
+    match /products/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && isValidImage();
+    }
+
+    // Default fallback: deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
