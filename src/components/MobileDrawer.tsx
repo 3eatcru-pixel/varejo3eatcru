@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   X, 
   Store, 
@@ -8,13 +8,15 @@ import {
   ChevronRight,
   ChevronDown
 } from 'lucide-react';
-import { MenuTab, menuGroups } from './Sidebar';
+import { MenuTab, buildMenuGroups } from './Sidebar';
 import { UserProfile, CompanyRole } from '../types';
 import { cn } from '../lib/utils';
 import { hasPermission } from '../lib/permissions';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeatureFlags } from '../contexts/FeatureFlagContext';
 import { useCompany } from '../contexts/CompanyContext';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface MobileDrawerProps {
   isOpen: boolean;
@@ -39,20 +41,44 @@ export default function MobileDrawer({
   const { hasFlag } = useFeatureFlags();
   const { branding } = useCompany();
   const isLeadDev = isPlatformAdmin;
+  const [businessSegment, setBusinessSegment] = useState<string>('RETAIL');
 
-  const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     inicio: true,
-    vendas: false,
-    estoque: false,
-    cadastros: false,
-    compras: false,
-    servicos: false,
+    vendas: true,
+    produtos: false,
+    clientes: false,
     financeiro: false,
+    equipe: false,
     relatorios: false,
-    conta: true,
-    empresa: true,
-    tecnico: false
+    empresa: false,
+    configuracoes: false,
+    hq: false
   });
+
+  useEffect(() => {
+    if (!user?.companyId) return;
+    const unsubOperational = onSnapshot(doc(db, 'settings', `operational_${user.companyId}`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.segments && Array.isArray(data.segments)) {
+          if (data.segments.includes('RESTAURANTE') || data.segments.includes('BAR')) {
+            setBusinessSegment('RESTAURANT');
+          } else if (data.segments.includes('SERVICOS')) {
+            setBusinessSegment('SERVICES');
+          } else if (data.segments.includes('DISTRIBUICAO') || data.segments.includes('ATACADO')) {
+            setBusinessSegment('DISTRIBUTION');
+          } else {
+            setBusinessSegment('RETAIL');
+          }
+        }
+      }
+    }, (err) => {
+      console.warn('Erro ao carregar segmento:', err);
+    });
+
+    return () => unsubOperational();
+  }, [user?.companyId]);
 
   // Handle ESC key to close drawer
   useEffect(() => {
@@ -76,6 +102,8 @@ export default function MobileDrawer({
     onClose();
   };
 
+  const dynamicMenuGroups = buildMenuGroups(businessSegment);
+
   return (
     <div className="md:hidden fixed inset-0 z-50 flex">
       {/* Backdrop */}
@@ -98,7 +126,7 @@ export default function MobileDrawer({
             </div>
             <div className="truncate">
               <h2 className="text-xs font-black uppercase tracking-wider text-white truncate">
-                {branding?.tradeName || branding?.name || 'VarejoPro POS'}
+                {branding?.tradeName || branding?.name || 'VarejoPro'}
               </h2>
               <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1.5 mt-0.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${activeRegister ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
@@ -118,8 +146,9 @@ export default function MobileDrawer({
         </div>
 
         {/* Scrollable Navigation Groups */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-2">
-          {menuGroups.map(group => {
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
+          {dynamicMenuGroups.map(group => {
+            if (group.id === 'hq' && !isLeadDev) return null;
             if (group.featureFlag && !hasFlag(group.featureFlag)) return null;
 
             const filteredItems = group.items.filter(item => {
@@ -138,6 +167,27 @@ export default function MobileDrawer({
             const isExpanded = expandedGroups[group.id];
             const hasActiveItem = filteredItems.some(item => item.id === activeTab);
 
+            if (filteredItems.length === 1 && group.id !== 'vendas' && group.id !== 'produtos') {
+              const singleItem = filteredItems[0];
+              const isActive = activeTab === singleItem.id;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => handleSelectTab(singleItem.id)}
+                  className={cn(
+                    "w-full min-h-[44px] flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
+                    isActive ? "text-slate-950 bg-emerald-400 font-black shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                  )}
+                >
+                  <div className="flex items-center gap-2.5 truncate">
+                    <GroupIcon className={cn("w-4 h-4 shrink-0", isActive ? "text-slate-950" : "text-slate-400")} />
+                    <span className="truncate">{group.label}</span>
+                  </div>
+                </button>
+              );
+            }
+
             return (
               <div key={group.id} className="space-y-1">
                 <button
@@ -152,15 +202,11 @@ export default function MobileDrawer({
                     <GroupIcon className={cn("w-4 h-4 shrink-0", hasActiveItem ? "text-emerald-400" : "text-slate-400")} />
                     <span className="truncate">{group.label}</span>
                   </div>
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 shrink-0 opacity-60" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 shrink-0 opacity-60" />
-                  )}
+                  {isExpanded ? <ChevronDown className="w-3.5 h-3.5 opacity-60" /> : <ChevronRight className="w-3.5 h-3.5 opacity-60" />}
                 </button>
 
                 {isExpanded && (
-                  <div className="pl-4 space-y-1 border-l border-slate-800 ml-3">
+                  <div className="pl-6 space-y-1 border-l border-slate-800 ml-4 py-1">
                     {filteredItems.map(item => {
                       const ItemIcon = item.icon || GroupIcon;
                       const isActive = activeTab === item.id;
@@ -172,20 +218,20 @@ export default function MobileDrawer({
                           type="button"
                           onClick={() => handleSelectTab(item.id)}
                           className={cn(
-                            "w-full min-h-[44px] text-left px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2.5",
+                            "w-full min-h-[40px] text-left px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
                             isActive 
                               ? isHQ
-                                ? "bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-400/20"
-                                : "bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/10" 
+                                ? "bg-amber-400 text-slate-950 font-black shadow-md"
+                                : "bg-emerald-500 text-slate-950 font-black shadow-md" 
                               : isHQ
                                 ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 font-black"
-                                : "text-slate-300 hover:text-white hover:bg-slate-800/60"
+                                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
                           )}
                         >
-                          <ItemIcon className="w-4 h-4 shrink-0" />
+                          <ItemIcon className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">{item.label}</span>
                           {isHQ && (
-                            <span className="ml-auto text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-black border border-amber-500/30">
+                            <span className="ml-auto text-[8px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-black border border-amber-500/30">
                               HQ
                             </span>
                           )}
@@ -199,17 +245,17 @@ export default function MobileDrawer({
           })}
         </nav>
 
-        {/* Footer with User info & Logout */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/80 space-y-2 pb-safe">
+        {/* Footer User Card */}
+        <div className="p-4 border-t border-slate-800 bg-slate-950/60 space-y-2">
           {isLeadDev && (
             <button
               type="button"
               onClick={() => handleSelectTab('hq_command_center')}
-              className="w-full min-h-[44px] p-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-300 hover:text-amber-200 flex items-center justify-between text-xs font-black uppercase tracking-wider transition-all"
+              className="w-full min-h-[40px] p-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-300 hover:text-amber-200 flex items-center justify-between text-xs font-black uppercase tracking-wider"
             >
-              <div className="flex items-center gap-2 truncate">
-                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="truncate">Command Center (HQ)</span>
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                <span>Command Center (HQ)</span>
               </div>
               <span className="text-[9px] bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded font-black">
                 SUPER
@@ -218,13 +264,13 @@ export default function MobileDrawer({
           )}
 
           <div className="flex items-center justify-between gap-2 p-2 bg-slate-900 rounded-2xl border border-slate-800">
-            <div className="flex items-center gap-2.5 truncate">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-black text-sm flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-2 truncate">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0">
                 {user.name.charAt(0).toUpperCase()}
               </div>
               <div className="truncate">
                 <p className="text-xs font-bold text-white truncate">{user.name}</p>
-                <p className="text-[10px] font-black uppercase text-emerald-400 truncate">
+                <p className="text-[9px] font-black uppercase text-emerald-400 truncate">
                   {isLeadDev ? 'Platform Admin' : user.role}
                 </p>
               </div>
@@ -236,10 +282,10 @@ export default function MobileDrawer({
                 onClose();
                 onLogout();
               }}
-              title="Sair do sistema"
-              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all"
+              title="Sair"
+              className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>

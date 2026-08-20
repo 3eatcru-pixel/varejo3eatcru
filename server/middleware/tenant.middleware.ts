@@ -7,20 +7,17 @@ import { AuthenticatedUser } from './auth';
  * It automatically strips `companyId` from user input and forces the one from the verified JWT.
  */
 export const enforceTenantIsolation = (req: Request, res: Response, next: NextFunction) => {
-  const authData = (req as any).auth as AuthenticatedUser;
+  const authData = ((req as any).auth || (req as any).userProfile) as AuthenticatedUser;
 
   if (!authData || !authData.companyId) {
-    return res.status(403).json({ 
-      error: 'TENANT_ISOLATION_ERROR', 
-      message: 'Request lacks verified tenant context.' 
-    });
+    // Unauthenticated or public endpoint; pass through to route handlers
+    return next();
   }
 
   // 1. Strip companyId if maliciously sent by frontend
   if (req.body && typeof req.body === 'object') {
     if ('companyId' in req.body && req.body.companyId !== authData.companyId) {
       console.warn(`[SECURITY] Tenant spoofing attempt detected. User ${authData.uid} tried to pass companyId ${req.body.companyId} instead of ${authData.companyId}`);
-      // Overwrite with the secure one
       req.body.companyId = authData.companyId;
     } else {
       req.body.companyId = authData.companyId;

@@ -27,7 +27,8 @@ import {
   Users, 
   PanelLeftClose,
   PanelLeftOpen,
-  Building2, MapPin, 
+  Building2, 
+  MapPin, 
   Palette,
   Sparkles,
   Scissors,
@@ -41,7 +42,11 @@ import {
   ShieldAlert,
   Archive,
   CreditCard,
-  Activity
+  Activity,
+  FolderTree,
+  UtensilsCrossed,
+  Layers,
+  ChefHat
 } from 'lucide-react';
 import { UserProfile, CompanyRole, StoreSettings } from '../types';
 import { cn } from '../lib/utils';
@@ -59,23 +64,24 @@ export type MenuTab =
   | 'vendas_list' 
   | 'vendas_devolucoes' 
   | 'vendas_cancelamentos'
+  | 'cadastros_produtos'
+  | 'cadastros_categorias'
+  | 'estoque_movimentacoes'
   | 'estoque_inventario' 
-  | 'estoque_movimentacoes' 
   | 'estoque_ajustes' 
   | 'estoque_transferencias'
-  | 'cadastros_produtos' 
   | 'cadastros_clientes_fidelidade' 
   | 'cadastros_fornecedores'
   | 'compras_entradas'
   | 'financeiro_caixa' 
   | 'financeiro_contas'
-  | 'relatorios'
-  | 'fiscal_documentos'
+  | 'financeiro_formas'
   | 'admin_equipe'
   | 'admin_escala'
   | 'admin_usuarios' 
   | 'admin_permissoes' 
   | 'admin_auditoria'
+  | 'relatorios'
   | 'admin_branding'
   | 'admin_arquivos'
   | 'admin_configuracoes'
@@ -83,6 +89,7 @@ export type MenuTab =
   | 'admin_billing'
   | 'admin_fiscal'
   | 'admin_filiais'
+  | 'fiscal_documentos'
   | 'tecnico_dispositivos'
   | 'tecnico_sistema'
   | 'conta_perfil'
@@ -97,6 +104,7 @@ export interface MenuGroup {
   label: string;
   icon: React.ElementType;
   featureFlag?: keyof AppFeatureFlags;
+  segmentRequirement?: 'RETAIL' | 'RESTAURANT' | 'SERVICES' | 'DISTRIBUTION' | 'ALL';
   items: {
     id: MenuTab;
     label: string;
@@ -104,6 +112,7 @@ export interface MenuGroup {
     permission?: PermissionKey;
     adminOnly?: boolean;
     featureFlag?: keyof AppFeatureFlags;
+    segmentRequirement?: 'RETAIL' | 'RESTAURANT' | 'SERVICES' | 'DISTRIBUTION' | 'ALL';
   }[];
 }
 
@@ -116,130 +125,148 @@ interface SidebarProps {
   onRoleChange: (role: CompanyRole) => void;
 }
 
-export const menuGroups: MenuGroup[] = [
-  {
-    id: 'inicio',
-    label: 'Início',
-    icon: Home,
-    items: [
-      { id: 'inicio_dashboard', label: 'Dashboard', icon: Home },
-      { id: 'inicio_assistant', label: 'Consultor IA Gemini', icon: Bot, featureFlag: 'aiAssistant' },
-    ]
-  },
-  {
-    id: 'vendas',
-    label: 'Vendas',
-    icon: ShoppingCart,
-    items: [
-      { id: 'vendas_pos', label: 'Frente de Caixa (PDV)', icon: ShoppingCart, permission: 'posAccess' },
-      { id: 'vendas_list', label: 'Histórico de Vendas', icon: Receipt, permission: 'posAccess' },
-      { id: 'vendas_devolucoes', label: 'Devoluções', icon: RotateCcw, permission: 'cancelSale' },
-      { id: 'vendas_cancelamentos', label: 'Cancelamentos', icon: XCircle, permission: 'cancelSale' },
-    ]
-  },
-  {
-    id: 'estoque',
-    label: 'Estoque',
-    icon: Package,
-    items: [
-      { id: 'estoque_inventario', label: 'Inventário & Balanço', icon: Package, permission: 'manageStock' },
-      { id: 'estoque_movimentacoes', label: 'Movimentações', icon: History, permission: 'manageStock' },
-      { id: 'estoque_ajustes', label: 'Ajustes de Estoque', icon: SlidersHorizontal, permission: 'manageStock' },
-      { id: 'estoque_transferencias', label: 'Transferências', icon: ArrowLeftRight, permission: 'manageStock', featureFlag: 'multiBranch' },
-    ]
-  },
-  {
-    id: 'cadastros',
-    label: 'Cadastros',
-    icon: Tag,
-    items: [
-      { id: 'cadastros_produtos', label: 'Produtos', icon: Tag, permission: 'manageStock' },
-      { id: 'cadastros_clientes_fidelidade', label: 'Clientes & Fidelidade', icon: Users, permission: 'posAccess' },
-      { id: 'cadastros_fornecedores', label: 'Fornecedores', icon: Truck, permission: 'manageStock' },
-    ]
-  },
-  {
-    id: 'compras',
-    label: 'Compras',
-    icon: ShoppingBag,
-    items: [
-      { id: 'compras_entradas', label: 'Entradas / Compras', icon: ShoppingBag, permission: 'manageStock' },
-    ]
-  },
-  {
-    id: 'servicos',
-    label: 'Serviços & Pulse',
-    icon: Scissors,
-    items: [
-      { id: 'servicos_gestao', label: 'Catálogo de Serviços', icon: Scissors, permission: 'manageStock', featureFlag: 'servicesEnabled' },
-      { id: 'servicos_agenda', label: 'Agenda & Atendimentos', icon: CalendarIcon, permission: 'posAccess', featureFlag: 'servicesEnabled' },
-      { id: 'pulse_dashboard', label: '3eatcru Pulse (QR Code)', icon: QrCode, permission: 'posAccess', featureFlag: 'pulseEnabled' },
-    ]
-  },
-  {
-    id: 'financeiro',
-    label: 'Financeiro',
-    icon: DollarSign,
-    featureFlag: 'financial' as any,
-    items: [
-      { id: 'financeiro_caixa', label: 'Caixa / Turnos', icon: Wallet, permission: 'manageFinancial' },
-      { id: 'financeiro_contas', label: 'Contas (Receber / Pagar)', icon: DollarSign, permission: 'manageFinancial' },
-    ]
-  },
-  {
-    id: 'relatorios',
-    label: 'Relatórios',
-    icon: BarChart3,
-    items: [
-      { id: 'relatorios', label: 'Relatórios & DRE', icon: BarChart3, permission: 'viewReports' },
-    ]
-  },
-  {
-    id: 'conta',
-    label: 'Minha Conta',
-    icon: User,
-    items: [
-      { id: 'conta_perfil', label: 'Meu Perfil', icon: User },
-      { id: 'conta_seguranca', label: 'Senha & Segurança', icon: Lock },
-    ]
-  },
-  {
-    id: 'empresa',
-    label: 'Minha Empresa',
-    icon: Building2,
-    items: [
-      { id: 'admin_dashboard', label: 'Painel de Controle', icon: Activity, adminOnly: true },
-      { id: 'admin_branding', label: 'Dados & Identidade', icon: Building2, adminOnly: true },
-      { id: 'admin_filiais', label: 'Filiais & Unidades', icon: MapPin, adminOnly: true },
-      { id: 'admin_equipe', label: 'Equipe & Funcionários', icon: Users, adminOnly: true },
-      { id: 'admin_escala', label: 'Escala de Trabalho', icon: CalendarIcon, adminOnly: true },
-      { id: 'admin_usuarios', label: 'Usuários do Sistema', icon: UserCheck, adminOnly: true },
-      { id: 'admin_permissoes', label: 'Permissões (RBAC)', icon: ShieldCheck, adminOnly: true },
-      { id: 'admin_configuracoes', label: 'Regras de Negócio', icon: Sliders, adminOnly: true },
-      { id: 'fiscal_documentos', label: 'Fiscal & Impostos', icon: Receipt, adminOnly: true },
-      { id: 'admin_billing', label: 'Assinatura & Plano', icon: CreditCard, adminOnly: true },
-      { id: 'admin_arquivos', label: 'Arquivos & Documentos', icon: Archive, adminOnly: true },
-      { id: 'admin_auditoria', label: 'Logs & Auditoria', icon: ShieldAlert, adminOnly: true },
-    ]
-  },
-  {
-    id: 'tecnico',
-    label: 'Configurações Técnicas',
-    icon: Monitor,
-    items: [
-      { id: 'tecnico_dispositivos', label: 'Dispositivos & Impressoras', icon: Printer },
-      { id: 'tecnico_sistema', label: 'Preferências do Sistema', icon: Smartphone },
-    ]
-  },
-  {
-    id: 'hq',
-    label: 'VarejoPro Platform',
-    icon: Sparkles,
-    items: [
-      { id: 'hq_command_center', label: 'Command Center (HQ)', icon: Building2, adminOnly: true },
-    ]
-  }
-];
+export function buildMenuGroups(businessSegment: string = 'RETAIL'): MenuGroup[] {
+  const isRestaurant = businessSegment === 'RESTAURANT' || businessSegment === 'BAR' || businessSegment === 'FOOD';
+  const isServices = businessSegment === 'SERVICES' || businessSegment === 'SALON';
+  const isDistribution = businessSegment === 'DISTRIBUTION' || businessSegment === 'WHOLESALE';
+
+  const groups: MenuGroup[] = [
+    // 🏠 1. Início
+    {
+      id: 'inicio',
+      label: 'Início',
+      icon: Home,
+      items: [
+        { id: 'inicio_dashboard', label: 'Início / Painel', icon: Home },
+        { id: 'inicio_assistant', label: 'Consultor IA', icon: Bot, featureFlag: 'aiAssistant' },
+      ]
+    },
+
+    // 🛒 2. Vendas
+    {
+      id: 'vendas',
+      label: 'Vendas',
+      icon: ShoppingCart,
+      items: [
+        { id: 'vendas_pos', label: 'Nova Venda (PDV)', icon: ShoppingCart, permission: 'posAccess' },
+        { id: 'vendas_list', label: 'Histórico de Vendas', icon: Receipt, permission: 'posAccess' },
+        { id: 'vendas_devolucoes', label: 'Devoluções & Trocas', icon: RotateCcw, permission: 'cancelSale' },
+        // Extensão Restaurante (Invisível para loja comum)
+        ...(isRestaurant ? [
+          { id: 'pulse_dashboard' as MenuTab, label: 'Mesas & Comandas', icon: UtensilsCrossed, permission: 'posAccess' as PermissionKey },
+        ] : []),
+        // Extensão Serviços (Invisível para loja comum)
+        ...(isServices ? [
+          { id: 'servicos_agenda' as MenuTab, label: 'Agenda & Atendimentos', icon: CalendarIcon, permission: 'posAccess' as PermissionKey },
+        ] : []),
+      ]
+    },
+
+    // 📦 3. Produtos & Estoque
+    {
+      id: 'produtos',
+      label: 'Produtos',
+      icon: Package,
+      items: [
+        { id: 'cadastros_produtos', label: 'Produtos', icon: Tag, permission: 'manageStock' },
+        { id: 'cadastros_categorias', label: 'Categorias', icon: FolderTree, permission: 'manageStock' },
+        { id: 'estoque_movimentacoes', label: 'Estoque & Movimentações', icon: History, permission: 'manageStock' },
+        { id: 'estoque_inventario', label: 'Inventário & Balanço', icon: Package, permission: 'manageStock' },
+        // Extensões Especializadas
+        ...(isDistribution ? [
+          { id: 'estoque_transferencias' as MenuTab, label: 'WMS & Transferências', icon: ArrowLeftRight, permission: 'manageStock' as PermissionKey },
+          { id: 'compras_entradas' as MenuTab, label: 'Entradas por NF-e', icon: ShoppingBag, permission: 'manageStock' as PermissionKey },
+        ] : []),
+        ...(isServices ? [
+          { id: 'servicos_gestao' as MenuTab, label: 'Catálogo de Serviços', icon: Scissors, permission: 'manageStock' as PermissionKey },
+        ] : [])
+      ]
+    },
+
+    // 👥 4. Clientes
+    {
+      id: 'clientes',
+      label: 'Clientes',
+      icon: Users,
+      items: [
+        { id: 'cadastros_clientes_fidelidade', label: 'Clientes & Fidelidade', icon: Users, permission: 'posAccess' },
+      ]
+    },
+
+    // 💰 5. Financeiro
+    {
+      id: 'financeiro',
+      label: 'Financeiro',
+      icon: DollarSign,
+      items: [
+        { id: 'financeiro_caixa', label: 'Caixa / Turnos', icon: Wallet, permission: 'manageFinancial' },
+        { id: 'financeiro_contas', label: 'Contas a Pagar / Receber', icon: DollarSign, permission: 'manageFinancial' },
+        { id: 'financeiro_formas', label: 'Formas de Pagamento', icon: CreditCard, permission: 'manageFinancial' },
+      ]
+    },
+
+    // 👨‍💼 6. Equipe
+    {
+      id: 'equipe',
+      label: 'Equipe',
+      icon: UserCheck,
+      items: [
+        { id: 'admin_equipe', label: 'Funcionários', icon: Users, adminOnly: true },
+        { id: 'admin_permissoes', label: 'Permissões & Acessos', icon: ShieldCheck, adminOnly: true },
+      ]
+    },
+
+    // 📊 7. Relatórios
+    {
+      id: 'relatorios',
+      label: 'Relatórios',
+      icon: BarChart3,
+      items: [
+        { id: 'relatorios', label: 'Relatórios & DRE', icon: BarChart3, permission: 'viewReports' },
+      ]
+    },
+
+    // 🏢 8. Minha Empresa
+    {
+      id: 'empresa',
+      label: 'Minha Empresa',
+      icon: Building2,
+      items: [
+        { id: 'admin_branding', label: 'Dados & Identidade', icon: Building2, adminOnly: true },
+        { id: 'fiscal_documentos', label: 'Fiscal & NFC-e', icon: Receipt, adminOnly: true },
+        { id: 'admin_billing', label: 'Assinatura & Plano', icon: CreditCard, adminOnly: true },
+        { id: 'admin_filiais', label: 'Filiais & Unidades', icon: MapPin, adminOnly: true, featureFlag: 'multiBranch' },
+        { id: 'admin_auditoria', label: 'Auditoria & Logs', icon: ShieldAlert, adminOnly: true },
+      ]
+    },
+
+    // ⚙️ 9. Configurações
+    {
+      id: 'configuracoes',
+      label: 'Configurações',
+      icon: Settings,
+      items: [
+        { id: 'admin_configuracoes', label: 'Tipo de Negócio & Regras', icon: Sliders, adminOnly: true },
+        { id: 'tecnico_dispositivos', label: 'Dispositivos & Impressoras', icon: Printer },
+        { id: 'tecnico_sistema', label: 'Preferências do Sistema', icon: Smartphone },
+      ]
+    },
+
+    // 🛠️ Platform Admin HQ (Somente Super Admins)
+    {
+      id: 'hq',
+      label: 'Plataforma',
+      icon: Sparkles,
+      items: [
+        { id: 'hq_command_center', label: 'Command Center (HQ)', icon: Building2, adminOnly: true },
+      ]
+    }
+  ];
+
+  return groups;
+}
+
+export const menuGroups: MenuGroup[] = buildMenuGroups('RETAIL');
 
 export default function Sidebar({
   activeTab,
@@ -250,33 +277,60 @@ export default function Sidebar({
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+  const [businessSegment, setBusinessSegment] = useState<string>('RETAIL');
   const { isPlatformAdmin } = useAuth();
   const { hasFlag } = useFeatureFlags();
   const isLeadDev = isPlatformAdmin;
 
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     inicio: true,
-    vendas: false,
-    estoque: false,
-    cadastros: false,
-    compras: false,
+    vendas: true,
+    produtos: false,
+    clientes: false,
     financeiro: false,
+    equipe: false,
     relatorios: false,
-    conta: true,
-    empresa: true,
-    tecnico: false
+    empresa: false,
+    configuracoes: false,
+    hq: false
   });
 
   useEffect(() => {
     if (!user?.companyId) return;
-    const unsub = onSnapshot(doc(db, 'settings', `store_${user.companyId}`), (docSnap) => {
+    
+    // Store Settings
+    const unsubStore = onSnapshot(doc(db, 'settings', `store_${user.companyId}`), (docSnap) => {
       if (docSnap.exists()) {
         setStoreSettings(docSnap.data() as StoreSettings);
       }
     }, (err) => {
       console.warn('Erro ao carregar configurações da loja:', err);
     });
-    return () => unsub();
+
+    // Operational Profile & Segment
+    const unsubOperational = onSnapshot(doc(db, 'settings', `operational_${user.companyId}`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.segments && Array.isArray(data.segments)) {
+          if (data.segments.includes('RESTAURANTE') || data.segments.includes('BAR')) {
+            setBusinessSegment('RESTAURANT');
+          } else if (data.segments.includes('SERVICOS')) {
+            setBusinessSegment('SERVICES');
+          } else if (data.segments.includes('DISTRIBUICAO') || data.segments.includes('ATACADO')) {
+            setBusinessSegment('DISTRIBUTION');
+          } else {
+            setBusinessSegment('RETAIL');
+          }
+        }
+      }
+    }, (err) => {
+      console.warn('Erro ao carregar segmento:', err);
+    });
+
+    return () => {
+      unsubStore();
+      unsubOperational();
+    };
   }, [user?.companyId]);
 
   const toggleGroup = (groupId: string) => {
@@ -285,6 +339,8 @@ export default function Sidebar({
       [groupId]: !prev[groupId]
     }));
   };
+
+  const dynamicMenuGroups = buildMenuGroups(businessSegment);
 
   return (
     <aside 
@@ -314,7 +370,7 @@ export default function Sidebar({
           {!collapsed && (
             <div className="truncate">
               <h1 className="text-xs font-black uppercase tracking-wider text-white truncate">
-                {storeSettings?.storeName || '3eatcru Varejo'}
+                {storeSettings?.storeName || 'VarejoPro'}
               </h1>
               <p 
                 className="text-[9px] font-bold uppercase tracking-widest truncate flex items-center gap-1.5"
@@ -338,8 +394,9 @@ export default function Sidebar({
       </div>
 
       {/* Navigation Groups */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-slate-800">
-        {menuGroups.map(group => {
+      <nav className="flex-1 overflow-y-auto p-3 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+        {dynamicMenuGroups.map(group => {
+          if (group.id === 'hq' && !isLeadDev) return null;
           if (group.featureFlag && !hasFlag(group.featureFlag)) return null;
 
           const filteredItems = group.items.filter(item => {
@@ -358,8 +415,30 @@ export default function Sidebar({
           const isExpanded = expandedGroups[group.id];
           const hasActiveItem = filteredItems.some(item => item.id === activeTab);
 
+          // If group has only 1 item, direct clickable button
+          if (filteredItems.length === 1 && group.id !== 'vendas' && group.id !== 'produtos') {
+            const singleItem = filteredItems[0];
+            const isActive = activeTab === singleItem.id;
+            return (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => onTabChange(singleItem.id)}
+                className={cn(
+                  "w-full min-h-[40px] flex items-center justify-between px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
+                  isActive ? "text-slate-950 bg-emerald-400 font-black shadow-md shadow-emerald-500/20" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                )}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <GroupIcon className={cn("w-4 h-4 shrink-0", isActive ? "text-slate-950" : "text-slate-400")} />
+                  {!collapsed && <span className="truncate">{group.label}</span>}
+                </div>
+              </button>
+            );
+          }
+
           return (
-            <div key={group.id} className="space-y-1">
+            <div key={group.id} className="space-y-0.5">
               {/* Group Header Button */}
               <button
                 type="button"
@@ -370,7 +449,7 @@ export default function Sidebar({
                   toggleGroup(group.id);
                 }}
                 className={cn(
-                  "w-full min-h-[40px] flex items-center justify-between px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
+                  "w-full min-h-[38px] flex items-center justify-between px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
                   hasActiveItem ? "text-emerald-400 bg-slate-800/80" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
                 )}
               >
@@ -385,7 +464,7 @@ export default function Sidebar({
 
               {/* Sub items */}
               {(!collapsed && isExpanded) && (
-                <div className="pl-6 space-y-0.5 border-l border-slate-800 ml-4">
+                <div className="pl-5 space-y-0.5 border-l border-slate-800 ml-4 py-0.5">
                   {filteredItems.map(item => {
                     const ItemIcon = item.icon || GroupIcon;
                     const isActive = activeTab === item.id;
@@ -397,7 +476,7 @@ export default function Sidebar({
                         type="button"
                         onClick={() => onTabChange(item.id)}
                         className={cn(
-                          "w-full min-h-[38px] text-left px-3 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                          "w-full min-h-[36px] text-left px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
                           isActive 
                             ? isHQ
                               ? "bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-400/20"
@@ -430,14 +509,14 @@ export default function Sidebar({
           <button
             type="button"
             onClick={() => onTabChange('hq_command_center')}
-            className="w-full min-h-[40px] p-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-300 hover:text-amber-200 hover:border-amber-400 flex items-center justify-between text-[10px] font-black uppercase tracking-wider transition-all"
+            className="w-full min-h-[38px] p-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-300 hover:text-amber-200 hover:border-amber-400 flex items-center justify-between text-[10px] font-black uppercase tracking-wider transition-all"
           >
             <div className="flex items-center gap-1.5 truncate">
               <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-pulse" />
               <span className="truncate">Command Center (HQ)</span>
             </div>
             <span className="text-[9px] bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded font-black">
-              SUPER ADMIN
+              SUPER
             </span>
           </button>
         )}

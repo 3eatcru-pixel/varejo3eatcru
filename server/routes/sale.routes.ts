@@ -20,16 +20,30 @@ router.get("/api/sales", requireApiAuth, async (req, res) => {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const offset = (page - 1) * limit;
 
-    const saleList = await db.select().from(sales)
-      .where(eq(sales.companyId, companyId))
-      .orderBy(desc(sales.createdAt))
-      .limit(limit)
-      .offset(offset);
+    const [saleList, [{ count }]] = await Promise.all([
+      db.select().from(sales)
+        .where(eq(sales.companyId, companyId))
+        .orderBy(desc(sales.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: sql<number>`count(*)` }).from(sales)
+        .where(eq(sales.companyId, companyId))
+    ]);
+
+    const total = Number(count) || 0;
+    const totalPages = Math.ceil(total / limit) || 1;
 
     return res.json({ 
       success: true, 
       sales: saleList,
-      pagination: { page, limit }
+      pagination: { 
+        page, 
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
+      }
     });
   } catch (error: any) {
     console.error("Erro ao listar vendas:", error);
@@ -38,23 +52,28 @@ router.get("/api/sales", requireApiAuth, async (req, res) => {
 });
 
 // Checkout / Create Sale
-router.post(["/api/sales", "/api/sale/checkout"], requireApiAuth, requirePermission("posAccess"), async (req, res) => {
+router.post(["/api/sales", "/api/sale/checkout", "/api/sale/create"], requireApiAuth, requirePermission("posAccess"), async (req, res) => {
   try {
     const userProfile = (req as any).userProfile;
     if (!userProfile?.companyId) return res.status(403).json({ error: "Contexto de empresa não encontrado." });
 
     const companyId = userProfile.companyId;
     const uid = userProfile.uid || userProfile.id;
-    const body = req.body || {};
+    const rawBody = req.body || {};
+    const body = rawBody.payload || rawBody;
 
     const {
       cart = [],
       items = [],
       discount = 0,
+      discountAmount = 0,
       paymentMethod = 'CASH',
       cashRegisterId,
+      activeRegister,
       branchId
     } = body;
+
+    const targetCashRegisterId = cashRegisterId || activeRegister?.id;
 
     const saleProductList = cart.length ? cart : items;
     if (!saleProductList || !saleProductList.length) {
@@ -82,8 +101,8 @@ router.post(["/api/sales", "/api/sale/checkout"], requireApiAuth, requirePermiss
       }
     }
 
-    if (cashRegisterId) {
-      const registerRows = await db.select().from(cashRegisters).where(and(eq(cashRegisters.id, cashRegisterId), eq(cashRegisters.companyId, companyId)));
+    if (targetCashRegisterId) {
+      const registerRows = await db.select().from(cashRegisters).where(and(eq(cashRegisters.id, targetCashRegisterId), eq(cashRegisters.companyId, companyId)));
       if (registerRows.length === 0) {
         return res.status(400).json({ error: "O caixa informado não pertence à sua empresa ou é inválido." });
       }
@@ -98,7 +117,6 @@ router.post(["/api/sales", "/api/sale/checkout"], requireApiAuth, requirePermiss
       if (!prodId) continue;
 
       const qty = Number(item.quantity);
-      // Validating quantity according to audit guidelines (Strict positive finite checks)
       if (isNaN(qty) || !Number.isFinite(qty) || qty <= 0 || qty > 10000) {
         return res.status(400).json({ error: `Quantidade inválida (${item.quantity}) para o produto ID: ${prodId}` });
       }
@@ -108,7 +126,7 @@ router.post(["/api/sales", "/api/sale/checkout"], requireApiAuth, requirePermiss
         return res.status(400).json({ error: `Produto inválido ou inexistente: ${prodId}` });
       }
 
-      const unitPrice = Number(prodRows[0].price);
+      const unitPrice = Number(prodRows[0].price) || Number(item.product?.price) || Number(item.unitPrice) || 0;
       const totalPrice = Number((qty * unitPrice).toFixed(2));
 
       calculatedSubtotal += totalPrice;
@@ -124,9 +142,9 @@ router.post(["/api/sales", "/api/sale/checkout"], requireApiAuth, requirePermiss
       return res.status(400).json({ error: "Nenhum produto válido encontrado para a venda." });
     }
 
-    const safeDiscount = Math.max(0, Number(discount) || 0);
+    const safeDiscount = Math.max(0, Number(discount || discountAmount || 0));
 
-    // Hardening checkout discount permissions (Audit P0)
+    // Hardening checkout discount permissions
     if (safeDiscount > 0) {
       const canDiscount = hasPermission(userProfile, 'giveDiscount');
       if (!canDiscount) {
@@ -136,7 +154,6 @@ router.post(["/api/sales", "/api/sale/checkout"], requireApiAuth, requirePermiss
         });
       }
 
-    // 30% limit for cashier, unlimited for owners/admins
       const discountRatio = safeDiscount / calculatedSubtotal;
       const isAdminOrOwner = userProfile.role === 'admin' || userProfile.role === 'OWNER' || userProfile.role === 'ADMIN';
       if (!isAdminOrOwner && discountRatio > 0.30) {
@@ -252,9 +269,13 @@ router.post(["/api/sales", "/api/sale/checkout"], requireApiAuth, requirePermiss
 });
 
 // Cancel Sale
-router.post(["/api/sales/:id/cancel", "/api/sale/cancel/:id"], requireApiAuth, requirePermission("cancelSale"), async (req, res) => {
+router.post(["/api/sales/:id/cancel", "/api/sale/cancel/:id", "/api/sale/cancel"], requireApiAuth, requirePermission("cancelSale"), async (req, res) => {
   try {
-    const saleId = String(req.params.id);
+    const saleId = String(req.params.id || req.body.saleId || req.body.id || '');
+    if (!saleId) {
+      return res.status(400).json({ error: "Identificador da venda (saleId) não informado." });
+    }
+
     const userProfile = (req as any).userProfile;
     if (!userProfile?.companyId) return res.status(403).json({ error: "Contexto de empresa não encontrado." });
 
@@ -264,7 +285,7 @@ router.post(["/api/sales/:id/cancel", "/api/sale/cancel/:id"], requireApiAuth, r
     const cancelReason = String(req.body.reason || "Cancelamento de venda pelo operador");
 
     await db.transaction(async (tx) => {
-      // Use .for('update') to lock the sale record exclusively, preventing double-cancel race conditions (Audit Point 21)
+      // Use .for('update') to lock the sale record exclusively, preventing double-cancel race conditions
       const existingSales = await tx.select().from(sales)
         .where(and(eq(sales.id, saleId), eq(sales.companyId, companyId)))
         .for('update');
@@ -329,6 +350,86 @@ router.post(["/api/sales/:id/cancel", "/api/sale/cancel/:id"], requireApiAuth, r
   } catch (error: any) {
     console.error("Erro ao cancelar venda:", error);
     return res.status(500).json({ error: error.message || "Erro ao cancelar a venda." });
+  }
+});
+
+// Refund / Estorno Parcial ou Total de Venda
+router.post("/api/sale/refund", requireApiAuth, requirePermission("cancelSale"), async (req, res) => {
+  try {
+    const { saleId, returnQuantities = {}, reason = "Devolução/Estorno de itens", refundMethod = "CASH" } = req.body || {};
+    if (!saleId) {
+      return res.status(400).json({ error: "Identificador da venda (saleId) é obrigatório." });
+    }
+
+    const userProfile = (req as any).userProfile;
+    if (!userProfile?.companyId) return res.status(403).json({ error: "Contexto de empresa não encontrado." });
+
+    const companyId = userProfile.companyId;
+    const uid = userProfile.uid || userProfile.id;
+    const nowIso = new Date().toISOString();
+
+    let totalRefundAmount = 0;
+
+    await db.transaction(async (tx) => {
+      const existingSales = await tx.select().from(sales)
+        .where(and(eq(sales.id, saleId), eq(sales.companyId, companyId)))
+        .for('update');
+
+      if (!existingSales.length) throw new Error("Venda não encontrada.");
+
+      const items = await tx.select().from(saleItems).where(eq(saleItems.saleId, saleId));
+
+      for (const item of items) {
+        const qtyToReturn = Number(returnQuantities[item.productId] || returnQuantities[item.id] || 0);
+        if (qtyToReturn > 0) {
+          const itemUnitPrice = Number(item.unitPrice) || 0;
+          totalRefundAmount += itemUnitPrice * qtyToReturn;
+
+          await tx.insert(inventoryMovements).values({
+            id: randomUUID(),
+            companyId,
+            productId: item.productId,
+            userId: uid,
+            type: 'REFUND',
+            quantity: qtyToReturn,
+            referenceId: saleId,
+            createdAt: nowIso
+          });
+
+          await tx.update(products)
+            .set({ 
+              stock: sql`${products.stock} + ${qtyToReturn}`,
+              updatedAt: nowIso
+            })
+            .where(and(eq(products.id, item.productId), eq(products.companyId, companyId)));
+        }
+      }
+
+      if (totalRefundAmount > 0) {
+        await tx.insert(financialRecords).values({
+          id: randomUUID(),
+          companyId,
+          type: 'PAYABLE',
+          description: `Devolução/Estorno Venda #${saleId.substring(0, 8).toUpperCase()}`,
+          amount: totalRefundAmount,
+          dueDate: nowIso.substring(0, 10),
+          category: 'Devoluções & Estornos',
+          status: 'PAID',
+          paymentDate: nowIso,
+          notes: `Método de devolução: ${refundMethod}. Motivo: ${reason}`,
+          createdBy: uid,
+          createdAt: nowIso,
+          updatedAt: nowIso
+        });
+      }
+    });
+
+    logAuditEvent(companyId, uid, 'SALE_REFUNDED', `Estorno da venda ${saleId} no valor de R$ ${totalRefundAmount}`, req);
+
+    return res.json({ success: true, message: "Estorno/Devolução processado com sucesso.", refundAmount: totalRefundAmount });
+  } catch (error: any) {
+    console.error("Erro ao processar estorno:", error);
+    return res.status(500).json({ error: error.message || "Erro ao processar estorno." });
   }
 });
 

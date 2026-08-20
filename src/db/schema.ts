@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { pgTable, text, integer, doublePrecision, boolean, unique } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, doublePrecision, boolean, unique, index } from 'drizzle-orm/pg-core';
 
 // --- PLATFORM & TENANTS ---
 
@@ -69,7 +69,10 @@ export const products = pgTable('products', {
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
-});
+}, (table) => ({
+  companyActiveNameIdx: index('products_company_active_name_idx').on(table.companyId, table.isActive, table.name),
+  companyBarcodeIdx: index('products_company_barcode_idx').on(table.companyId, table.barcode),
+}));
 
 export const inventoryMovements = pgTable('inventory_movements', {
   id: text('id').primaryKey(),
@@ -175,6 +178,8 @@ export const sales = pgTable('sales', {
   createdAt: text('created_at').notNull(),
 }, (table) => ({
   unqIdempotency: unique().on(table.companyId, table.idempotencyKey),
+  companyCreatedAtIdx: index('sales_company_created_idx').on(table.companyId, table.createdAt),
+  companyStatusIdx: index('sales_company_status_idx').on(table.companyId, table.status),
 }));
 
 export const saleItems = pgTable('sale_items', {
@@ -216,6 +221,18 @@ export const financialRecords = pgTable('financial_records', {
   createdBy: text('created_by'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
+}, (table) => ({
+  companyTypeDueIdx: index('financial_records_company_type_due_idx').on(table.companyId, table.type, table.dueDate),
+}));
+
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id),
+  email: text('email').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  usedAt: text('used_at'),
+  createdAt: text('created_at').notNull(),
 });
 
 // --- RELATIONS ---

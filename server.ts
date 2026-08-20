@@ -73,8 +73,11 @@ async function startServer() {
     index: false
   }));
 
-  // Global Rate Limiting Connection (Audit Point 11)
+  // Global Rate Limiting Connection (Audit Point 11 & 23)
   app.use(rateLimiter);
+
+  // Global Tenant Isolation Enforcer (Audit Point 24)
+  app.use(enforceTenantIsolation);
 
   // API Routes
   app.use(authRoutes);

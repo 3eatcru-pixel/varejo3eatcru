@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { requireApiAuth, requirePermission } from "../middleware/auth";
 import { LicenseService } from "../services/license.service";
 import { db } from "../../src/db/index.ts";
-import { products, inventoryMovements, users } from "../../src/db/schema.ts";
+import { products, inventoryMovements, users, financialRecords } from "../../src/db/schema.ts";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { logAuditEvent } from "../lib/audit";
 
@@ -20,16 +20,30 @@ router.get("/api/stock/products", requireApiAuth, async (req, res) => {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const offset = (page - 1) * limit;
 
-    const prodList = await db.select().from(products)
-      .where(and(eq(products.companyId, companyId), eq(products.isActive, true)))
-      .orderBy(products.name)
-      .limit(limit)
-      .offset(offset);
+    const [prodList, [{ count }]] = await Promise.all([
+      db.select().from(products)
+        .where(and(eq(products.companyId, companyId), eq(products.isActive, true)))
+        .orderBy(products.name)
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: sql<number>`count(*)` }).from(products)
+        .where(and(eq(products.companyId, companyId), eq(products.isActive, true)))
+    ]);
+
+    const total = Number(count) || 0;
+    const totalPages = Math.ceil(total / limit) || 1;
 
     return res.json({ 
       success: true, 
       products: prodList,
-      pagination: { page, limit }
+      pagination: { 
+        page, 
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
+      }
     });
   } catch (error: any) {
     console.error("Erro ao listar produtos:", error);
@@ -239,6 +253,142 @@ router.delete("/api/stock/products/:id", requireApiAuth, requirePermission("mana
   } catch (error: any) {
     console.error("Erro ao remover produto:", error);
     return res.status(500).json({ error: error.message || "Erro ao remover produto." });
+  }
+});
+
+// Transfer Stock Endpoint (/api/stock/transfer)
+router.post("/api/stock/transfer", requireApiAuth, requirePermission("manageStock"), async (req, res) => {
+  try {
+    const userProfile = (req as any).userProfile;
+    if (!userProfile?.companyId) return res.status(403).json({ error: "Contexto de empresa não encontrado." });
+
+    const companyId = userProfile.companyId;
+    const uid = userProfile.uid || userProfile.id;
+    const { product, productId, fromLocation = "Matriz", toLocation = "Depósito", qty = 0, notes = "Transferência interna" } = req.body || {};
+
+    const targetProductId = productId || product?.id;
+    const transferQty = Number(qty);
+
+    if (!targetProductId) {
+      return res.status(400).json({ error: "Produto é obrigatório para transferência." });
+    }
+    if (!Number.isFinite(transferQty) || transferQty <= 0) {
+      return res.status(400).json({ error: "Quantidade de transferência inválida." });
+    }
+
+    const nowIso = new Date().toISOString();
+
+    await db.transaction(async (tx) => {
+      const prodRows = await tx.select().from(products).where(and(eq(products.id, targetProductId), eq(products.companyId, companyId)));
+      if (!prodRows.length) {
+        throw new Error("Produto não encontrado ou desativado.");
+      }
+
+      await tx.insert(inventoryMovements).values({
+        id: randomUUID(),
+        companyId,
+        productId: targetProductId,
+        userId: uid,
+        type: 'TRANSFER',
+        quantity: transferQty,
+        referenceId: `De: ${fromLocation} Para: ${toLocation} | ${notes}`,
+        createdAt: nowIso
+      });
+    });
+
+    logAuditEvent(companyId, uid, 'STOCK_TRANSFERRED', `Transferência de ${transferQty} un do produto ${targetProductId} de ${fromLocation} para ${toLocation}`, req);
+
+    return res.json({ success: true, message: "Transferência de estoque registrada com sucesso." });
+  } catch (error: any) {
+    console.error("Erro na transferência de estoque:", error);
+    return res.status(500).json({ error: error.message || "Erro ao transferir estoque." });
+  }
+});
+
+// Purchase Creation Endpoint (/api/purchase/create & /api/purchases)
+router.post(["/api/purchase/create", "/api/purchases"], requireApiAuth, requirePermission("manageStock"), async (req, res) => {
+  try {
+    const userProfile = (req as any).userProfile;
+    if (!userProfile?.companyId) return res.status(403).json({ error: "Contexto de empresa não encontrado." });
+
+    const companyId = userProfile.companyId;
+    const uid = userProfile.uid || userProfile.id;
+    const rawBody = req.body || {};
+    const body = rawBody.payload || rawBody;
+
+    const {
+      supplierId,
+      supplierName = "Fornecedor Direto",
+      invoiceNumber = "",
+      paymentMethod = "BOLETO",
+      notes = "",
+      purchaseItems = [],
+      totalPurchaseCost = 0
+    } = body;
+
+    if (!purchaseItems || !purchaseItems.length) {
+      return res.status(400).json({ error: "A compra deve conter ao menos um item de produto." });
+    }
+
+    const nowIso = new Date().toISOString();
+    const purchaseId = randomUUID();
+
+    await db.transaction(async (tx) => {
+      for (const item of purchaseItems) {
+        const prodId = item.productId || item.product?.id || item.id;
+        const qty = Number(item.quantity || item.qty || 0);
+        const costPrice = Number(item.costPrice || item.unitCost || item.price || 0);
+
+        if (!prodId || qty <= 0) continue;
+
+        // Register inventory entry movement
+        await tx.insert(inventoryMovements).values({
+          id: randomUUID(),
+          companyId,
+          productId: prodId,
+          userId: uid,
+          type: 'ENTRY',
+          quantity: qty,
+          referenceId: `NF: ${invoiceNumber || 'S/N'} | Fornecedor: ${supplierName}`,
+          createdAt: nowIso
+        });
+
+        // Increase product stock and update cost price if provided
+        await tx.update(products)
+          .set({
+            stock: sql`${products.stock} + ${qty}`,
+            costPrice: costPrice > 0 ? costPrice : undefined,
+            updatedAt: nowIso
+          })
+          .where(and(eq(products.id, prodId), eq(products.companyId, companyId)));
+      }
+
+      // Register financial payable record
+      const safeTotalCost = Number(totalPurchaseCost) || 0;
+      if (safeTotalCost > 0) {
+        await tx.insert(financialRecords).values({
+          id: randomUUID(),
+          companyId,
+          type: 'PAYABLE',
+          description: `Entrada de Mercadoria / Compra NF #${invoiceNumber || 'S/N'}`,
+          amount: safeTotalCost,
+          dueDate: nowIso.substring(0, 10),
+          category: 'Compras de Estoque',
+          status: 'PENDING',
+          notes: `Fornecedor: ${supplierName} | ID Compra: ${purchaseId}. ${notes}`,
+          createdBy: uid,
+          createdAt: nowIso,
+          updatedAt: nowIso
+        });
+      }
+    });
+
+    logAuditEvent(companyId, uid, 'PURCHASE_CREATED', `Entrada de compra NF ${invoiceNumber} registrada no valor de R$ ${totalPurchaseCost}`, req);
+
+    return res.json({ success: true, message: "Compra e entrada de estoque registradas com sucesso.", purchaseId });
+  } catch (error: any) {
+    console.error("Erro ao registrar compra:", error);
+    return res.status(500).json({ error: error.message || "Erro ao registrar compra." });
   }
 });
 

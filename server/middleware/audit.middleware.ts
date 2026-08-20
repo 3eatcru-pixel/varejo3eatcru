@@ -1,13 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../../src/db';
-import { sql } from 'drizzle-orm';
+import { platformAuditLogs } from '../../src/db/schema.ts';
 import { AuthenticatedUser } from './auth';
+import { randomUUID } from 'crypto';
 
 /**
  * Audit Middleware
  * Intercepts write operations (POST, PUT, PATCH, DELETE) and logs them
- * along with the user, companyId, IP, and terminal.
- * Addresses Audit Point 8: Quem alterou o quê, quando, de onde e por quê?
+ * along with the user, companyId, IP, and terminal into PostgreSQL.
+ * Addresses Audit Point 8 & 26: Quem alterou o quê, quando, de onde e por quê?
  */
 export const auditLog = (actionName: string, getReason?: (req: Request) => string) => {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -20,31 +21,27 @@ export const auditLog = (actionName: string, getReason?: (req: Request) => strin
           if (!authData || !authData.companyId) return; // Skip if no auth context
 
           const reason = getReason ? getReason(req) : (req.body?.reason || req.query?.reason || 'Standard operation');
-          const terminal = authData.terminalId || req.headers['x-terminal-id'] || 'WEB_DASHBOARD';
+          const terminal = authData.terminalId || (req.headers['x-terminal-id'] as string) || 'WEB_DASHBOARD';
           
-          // In a real database, we would insert into an `audit_logs` table
-          // Since the drizzle schema might not have audit_logs yet, we just console.log for the scaffold
-          // OR we can dynamically insert if we assume a generic audit table exists.
-          
-          const logEntry = {
-            companyId: authData.companyId,
-            userId: authData.uid,
-            userName: authData.name,
-            action: actionName,
+          const detailsObj = {
             resource: req.originalUrl,
             method: req.method,
             ipAddress: req.ip || req.socket.remoteAddress,
             terminalId: terminal,
             reason: reason,
             payloadHash: req.body ? hashPayload(req.body) : null,
-            timestamp: new Date().toISOString()
           };
 
-          console.log('[SECURITY_AUDIT] Immutable Event Logged:', JSON.stringify(logEntry));
+          await db.insert(platformAuditLogs).values({
+            id: randomUUID(),
+            companyId: authData.companyId,
+            userId: authData.uid,
+            action: actionName,
+            details: JSON.stringify(detailsObj),
+            timestamp: new Date().toISOString()
+          });
 
-          // If db has an audit_logs table, we would do:
-          // await db.insert(audit_logs).values(logEntry);
-
+          console.log(`[SECURITY_AUDIT] Event '${actionName}' persisted for company ${authData.companyId}`);
         } catch (error) {
           console.error('[SECURITY_AUDIT] Failed to record audit log:', error);
         }
@@ -56,6 +53,10 @@ export const auditLog = (actionName: string, getReason?: (req: Request) => strin
 };
 
 function hashPayload(payload: any): string {
-  // Simple representation for now. In production, use crypto.createHash('sha256')
-  return Buffer.from(JSON.stringify(payload)).toString('base64').substring(0, 32);
+  try {
+    return Buffer.from(JSON.stringify(payload)).toString('base64').substring(0, 32);
+  } catch {
+    return 'unparseable';
+  }
 }
+

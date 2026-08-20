@@ -207,11 +207,11 @@ export default function DashboardOverview({
           </button>
           
           <button
-            onClick={() => onNavigate('compras_entradas')}
+            onClick={() => onNavigate('cadastros_produtos')}
             className="flex-1 md:flex-initial px-4 py-3 min-h-[48px] bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-600 transition-all flex items-center justify-center gap-2"
           >
             <PackageCheck className="w-4 h-4 text-emerald-400" />
-            <span>Entrada de Nota / Compras</span>
+            <span>Gerenciar Produtos</span>
           </button>
         </div>
       </div>

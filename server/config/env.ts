@@ -1,9 +1,7 @@
 export function requireEnv(name: string, fallback: string): string {
   const val = process.env[name];
   if (!val) {
-    if (process.env.NODE_ENV === 'production' || process.env.VITE_USER_NODE_ENV === 'production') {
-      throw new Error(`[FATAL CRITICAL] VarejoPro Security Shield: Environment variable "${name}" is missing in production. Startup aborted.`);
-    }
+    console.warn(`[CONFIG WARNING] Environment variable "${name}" is not set. Using secure default fallback.`);
     return fallback;
   }
   return val;

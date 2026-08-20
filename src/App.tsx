@@ -32,9 +32,11 @@ import SalesManager from './modules/vendas/SalesManager';
 import DevolucoesManager from './modules/vendas/DevolucoesManager';
 import CancelamentosManager from './modules/vendas/CancelamentosManager';
 import ClientesFidelidadeManager from './modules/cadastros/ClientesFidelidadeManager';
+import CategoriasManager from './modules/cadastros/CategoriasManager';
 import SuppliersList from './modules/cadastros/SuppliersList';
 import AiStoreAssistant from './modules/assistente/AiStoreAssistant';
 import FinancialManager from './modules/financeiro/FinancialManager';
+import FormasPagamentoManager from './modules/financeiro/FormasPagamentoManager';
 import FiscalSettings from './modules/fiscal/FiscalSettings';
 import FiscalManager from './modules/fiscal/FiscalManager';
 import ExecutiveReports from './modules/relatorios/ExecutiveReports';
@@ -264,10 +266,15 @@ function MainApplication() {
               </ProtectedRoute>
             )}
 
-            {/* 🏷️ Cadastros */}
+            {/* 🏷️ Cadastros & Produtos */}
             {activeTab === 'cadastros_produtos' && (
               <ProtectedRoute user={userProfile} permission="manageStock">
                 <InventoryList user={userProfile} />
+              </ProtectedRoute>
+            )}
+            {activeTab === 'cadastros_categorias' && (
+              <ProtectedRoute user={userProfile} permission="manageStock">
+                <CategoriasManager user={userProfile} />
               </ProtectedRoute>
             )}
             {activeTab === 'cadastros_clientes_fidelidade' && (
@@ -320,6 +327,11 @@ function MainApplication() {
             {activeTab === 'financeiro_contas' && (
               <ProtectedRoute user={userProfile} permission="manageFinancial">
                 <FinancialManager user={userProfile} />
+              </ProtectedRoute>
+            )}
+            {activeTab === 'financeiro_formas' && (
+              <ProtectedRoute user={userProfile} permission="manageFinancial">
+                <FormasPagamentoManager user={userProfile} />
               </ProtectedRoute>
             )}
 

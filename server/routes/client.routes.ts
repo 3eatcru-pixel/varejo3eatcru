@@ -2,7 +2,7 @@ import express from "express";
 import { requireApiAuth } from "../middleware/auth";
 import { db } from "../../src/db";
 import { clients, clientLedger } from "../../src/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { LicenseService } from "../services/license.service";
 import { logAuditEvent } from "../lib/audit";
@@ -18,16 +18,30 @@ router.get("/api/clients", requireApiAuth, async (req, res) => {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const offset = (page - 1) * limit;
 
-    const clientList = await db.select().from(clients)
-      .where(eq(clients.companyId, companyId))
-      .orderBy(clients.name)
-      .limit(limit)
-      .offset(offset);
+    const [clientList, [{ count }]] = await Promise.all([
+      db.select().from(clients)
+        .where(eq(clients.companyId, companyId))
+        .orderBy(clients.name)
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: sql<number>`count(*)` }).from(clients)
+        .where(eq(clients.companyId, companyId))
+    ]);
+
+    const total = Number(count) || 0;
+    const totalPages = Math.ceil(total / limit) || 1;
 
     return res.json({ 
       success: true, 
       clients: clientList,
-      pagination: { page, limit }
+      pagination: { 
+        page, 
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
+      }
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

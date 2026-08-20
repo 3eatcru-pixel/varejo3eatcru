@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from '../../src/db';
-import { users, companies, memberships, branches, devices, platformCompanies, platformSubscriptions, userInvitations } from '../../src/db/schema';
+import { users, companies, memberships, branches, devices, platformCompanies, platformSubscriptions, userInvitations, passwordResetTokens } from '../../src/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { requireApiAuth } from '../middleware/auth';
@@ -337,9 +337,7 @@ interface ResetTokenData {
   email: string;
   expiresAt: number;
 }
-const resetTokensStore = new Map<string, ResetTokenData>();
-
-// Request Password Reset (Audit Point 10)
+// Request Password Reset (Persisted in PostgreSQL)
 router.post('/api/auth/reset-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -347,7 +345,7 @@ router.post('/api/auth/reset-password', async (req, res) => {
 
     const userResult = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (userResult.length === 0) {
-      // Respond with success to prevent user enumeration, but don't generate a token
+      // Respond with success to prevent user enumeration
       return res.json({ 
         success: true, 
         message: 'Se houver uma conta associada a este e-mail, enviaremos as instruções de recuperação.' 
@@ -355,35 +353,40 @@ router.post('/api/auth/reset-password', async (req, res) => {
     }
 
     const user = userResult[0];
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes expiration
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes expiration
+    const nowIso = new Date().toISOString();
 
-    resetTokensStore.set(token, {
+    await db.insert(passwordResetTokens).values({
+      id: crypto.randomUUID(),
       userId: user.id,
       email: user.email,
-      expiresAt
+      tokenHash,
+      expiresAt,
+      createdAt: nowIso
     });
 
-    const resetLink = `${req.protocol}://${req.get('host') || 'localhost:3000'}/reset-password?token=${token}`;
+    const resetLink = `${req.protocol}://${req.get('host') || 'localhost:3000'}/reset-password?token=${rawToken}`;
     console.log(`\n==================================================`);
     console.log(`[AUTH SECURITY SHIELD] Password Reset Request for ${email}`);
-    console.log(`Token: ${token}`);
+    console.log(`Token: ${rawToken}`);
     console.log(`Link: ${resetLink}`);
-    console.log(`Expires: ${new Date(expiresAt).toISOString()}`);
+    console.log(`Expires: ${expiresAt}`);
     console.log(`==================================================\n`);
 
     return res.json({ 
       success: true, 
       message: 'Se houver uma conta associada a este e-mail, enviaremos as instruções de recuperação.',
-      // Return link in development/local environment for easy sandbox access
       developmentLink: process.env.NODE_ENV !== 'production' ? resetLink : undefined
     });
   } catch (error: any) {
+    console.error('Erro na solicitação de reset de senha:', error);
     return res.status(500).json({ error: error.message });
   }
 });
 
-// Confirm Password Reset (Audit Point 10 - Token consumption & single use)
+// Confirm Password Reset (Token consumption & single use from PostgreSQL)
 router.post('/api/auth/reset-password/confirm', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
@@ -396,13 +399,17 @@ router.post('/api/auth/reset-password/confirm', async (req, res) => {
       return res.status(400).json({ error: 'A nova senha deve possuir no mínimo 6 caracteres.' });
     }
 
-    const tokenData = resetTokensStore.get(token);
-    if (!tokenData) {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const resetRows = await db.select().from(passwordResetTokens)
+      .where(and(eq(passwordResetTokens.tokenHash, tokenHash), sql`${passwordResetTokens.usedAt} IS NULL`))
+      .limit(1);
+
+    if (resetRows.length === 0) {
       return res.status(400).json({ error: 'Token de recuperação inválido ou já utilizado.' });
     }
 
-    if (Date.now() > tokenData.expiresAt) {
-      resetTokensStore.delete(token); // Cleanup
+    const resetRecord = resetRows[0];
+    if (new Date().toISOString() > resetRecord.expiresAt) {
       return res.status(400).json({ error: 'O token de recuperação expirou. Solicite um novo link.' });
     }
 
@@ -410,18 +417,22 @@ router.post('/api/auth/reset-password/confirm', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
 
-    // Update user password
-    await db.update(users)
-      .set({ 
-        passwordHash,
-        tokenVersion: sql`${users.tokenVersion} + 1`
-      })
-      .where(eq(users.id, tokenData.userId));
+    // Update user password and invalidate token
+    const nowIso = new Date().toISOString();
+    await db.transaction(async (tx) => {
+      await tx.update(users)
+        .set({ 
+          passwordHash,
+          tokenVersion: sql`${users.tokenVersion} + 1`
+        })
+        .where(eq(users.id, resetRecord.userId));
 
-    // Invalidate the token (Single-use guarantee)
-    resetTokensStore.delete(token);
+      await tx.update(passwordResetTokens)
+        .set({ usedAt: nowIso })
+        .where(eq(passwordResetTokens.id, resetRecord.id));
+    });
 
-    console.log(`[AUTH SECURITY SHIELD] Password successfully reset for user ID: ${tokenData.userId}`);
+    console.log(`[AUTH SECURITY SHIELD] Password successfully reset for user ID: ${resetRecord.userId}`);
 
     return res.json({ 
       success: true, 

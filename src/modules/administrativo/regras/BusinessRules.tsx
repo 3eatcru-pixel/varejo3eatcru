@@ -1,11 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../../../types';
-import { Sliders, CheckCircle2, ShoppingBag, Package, Truck, Clock, Percent, Calculator, ShieldCheck, Save, Loader2, Info } from 'lucide-react';
+import { 
+  Sliders, 
+  CheckCircle2, 
+  ShoppingBag, 
+  Package, 
+  Truck, 
+  Clock, 
+  Percent, 
+  Calculator, 
+  ShieldCheck, 
+  Save, 
+  Loader2, 
+  Info,
+  Store,
+  UtensilsCrossed,
+  Scissors,
+  Building2,
+  Layers,
+  Sparkles,
+  ChevronRight
+} from 'lucide-react';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../../lib/firebase';
 import { useToast } from '../../../components/Toast';
 
 export default function BusinessRules({ user }: { user: UserProfile }) {
-  const { showSuccess } = useToast();
+  const { showSuccess, showError } = useToast();
+  const companyId = user.companyId || 'empresa_principal';
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [rules, setRules] = useState({
     // Vendas
@@ -25,18 +49,87 @@ export default function BusinessRules({ user }: { user: UserProfile }) {
     autoAdjustStockOnSale: true,
     requireCostPrice: true,
     
-    // Operação
-    businessType: 'RETAIL',
+    // Operação / Segmento
+    businessType: 'RETAIL', // 'RETAIL' | 'RESTAURANT' | 'SERVICES' | 'DISTRIBUTION'
     enableTableService: false,
     openCashRegisterOnStart: true,
   });
 
-  const handleSave = () => {
+  useEffect(() => {
+    const docRef = doc(db, 'settings', `rules_${companyId}`);
+    const unsub = onSnapshot(docRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setRules(prev => ({ ...prev, ...data }));
+      }
+      setInitialLoading(false);
+    }, (err) => {
+      console.warn('Erro ao carregar regras:', err);
+      setInitialLoading(false);
+    });
+
+    return () => unsub();
+  }, [companyId]);
+
+  const handleSelectSegment = async (segment: 'RETAIL' | 'RESTAURANT' | 'SERVICES' | 'DISTRIBUTION') => {
+    const updated = {
+      ...rules,
+      businessType: segment,
+      enableTableService: segment === 'RESTAURANT'
+    };
+    setRules(updated);
+
+    // Also update operational settings for synchronization
+    try {
+      let segmentsArray = ['VAREJO'];
+      let operationsArray = ['BALCAO', 'RETIRADA'];
+      if (segment === 'RESTAURANT') {
+        segmentsArray = ['RESTAURANTE'];
+        operationsArray = ['BALCAO', 'MESA', 'COMANDA', 'DELIVERY'];
+      } else if (segment === 'SERVICES') {
+        segmentsArray = ['SERVICOS'];
+        operationsArray = ['BALCAO', 'AGENDAMENTO'];
+      } else if (segment === 'DISTRIBUTION') {
+        segmentsArray = ['DISTRIBUICAO', 'ATACADO'];
+        operationsArray = ['BALCAO', 'ENTREGA', 'LOGISTICA'];
+      }
+
+      await setDoc(doc(db, 'settings', `operational_${companyId}`), {
+        segments: segmentsArray,
+        operations: operationsArray,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      await setDoc(doc(db, 'settings', `rules_${companyId}`), {
+        ...updated,
+        companyId,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      showSuccess(`Tipo de empresa alterado para ${
+        segment === 'RETAIL' ? 'Loja / Varejo' :
+        segment === 'RESTAURANT' ? 'Restaurante / Bar' :
+        segment === 'SERVICES' ? 'Serviços & Atendimento' : 'Distribuidora & Logística'
+      }. O menu e os recursos foram adaptados automaticamente!`, 'Segmento Atualizado');
+    } catch (e) {
+      showError('Erro ao sincronizar segmento da empresa.');
+    }
+  };
+
+  const handleSave = async () => {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      await setDoc(doc(db, 'settings', `rules_${companyId}`), {
+        ...rules,
+        companyId,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      showSuccess('Todas as regras de negócio e parâmetros operacionais foram atualizados com sucesso.', 'Configurações Salvas');
+    } catch (err: any) {
+      showError('Falha ao salvar as regras de negócio.');
+    } finally {
       setLoading(false);
-      showSuccess('Todas as regras de negócio e parâmetros operacionais foram atualizados.', 'Configurações Salvas');
-    }, 1500);
+    }
   };
 
   return (
@@ -47,10 +140,10 @@ export default function BusinessRules({ user }: { user: UserProfile }) {
           <div>
             <h2 className="text-xl font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
               <Sliders className="w-6 h-6 text-amber-500" />
-              Regras de Negócio & Operação
+              Tipo de Negócio & Regras de Operação
             </h2>
             <p className="text-xs font-bold text-slate-500 mt-1">
-              Defina como o VarejoPro deve se comportar no dia a dia da sua empresa
+              Defina o segmento da sua empresa e como o sistema deve se comportar no dia a dia
             </p>
           </div>
           <button
@@ -61,6 +154,142 @@ export default function BusinessRules({ user }: { user: UserProfile }) {
             {loading ? <Loader2 className="w-4 h-4 animate-spin text-amber-400" /> : <Save className="w-4 h-4 text-amber-400" />}
             {loading ? 'Processando...' : 'Salvar Regras'}
           </button>
+        </div>
+
+        {/* 🏢 Segment Selector (Clean & Invisible Extension Concept) */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                <Store className="w-4 h-4 text-emerald-600" />
+                Qual é o tipo da sua empresa?
+              </h3>
+              <p className="text-[11px] font-bold text-slate-400 mt-0.5">
+                O VarejoPro adapta menus e ferramentas automaticamente para a sua rotina diária
+              </p>
+            </div>
+            <span className="text-[10px] bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-black uppercase tracking-widest border border-emerald-200">
+              Adaptativo
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            {/* 1. Varejo Comum */}
+            <div
+              onClick={() => handleSelectSegment('RETAIL')}
+              className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
+                rules.businessType === 'RETAIL'
+                  ? 'border-emerald-500 bg-emerald-50/50 shadow-md ring-2 ring-emerald-500/20'
+                  : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'
+              }`}
+            >
+              {rules.businessType === 'RETAIL' && (
+                <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center">
+                  <CheckCircle2 className="w-3.5 h-3.5 stroke-[3]" />
+                </div>
+              )}
+              <div className="space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                  <Store className="w-5 h-5" />
+                </div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Loja / Varejo</h4>
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                  Moda, calçados, conveniência, mercados e comércio em geral. Experiência direta e simplificada.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-100 mt-3 flex items-center gap-1.5 text-[9px] font-bold text-emerald-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                PDV rápido + Estoque limpo
+              </div>
+            </div>
+
+            {/* 2. Restaurante / Bar */}
+            <div
+              onClick={() => handleSelectSegment('RESTAURANT')}
+              className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
+                rules.businessType === 'RESTAURANT'
+                  ? 'border-amber-500 bg-amber-50/50 shadow-md ring-2 ring-amber-500/20'
+                  : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'
+              }`}
+            >
+              {rules.businessType === 'RESTAURANT' && (
+                <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center">
+                  <CheckCircle2 className="w-3.5 h-3.5 stroke-[3]" />
+                </div>
+              )}
+              <div className="space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black">
+                  <UtensilsCrossed className="w-5 h-5" />
+                </div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Restaurante / Bar</h4>
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                  Bares, cafeterias e restaurantes. Habilita gestão de mesas, comandas e chamadas de garçom.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-100 mt-3 flex items-center gap-1.5 text-[9px] font-bold text-amber-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Mesas + Comandas + Cozinha
+              </div>
+            </div>
+
+            {/* 3. Serviços */}
+            <div
+              onClick={() => handleSelectSegment('SERVICES')}
+              className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
+                rules.businessType === 'SERVICES'
+                  ? 'border-indigo-500 bg-indigo-50/50 shadow-md ring-2 ring-indigo-500/20'
+                  : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'
+              }`}
+            >
+              {rules.businessType === 'SERVICES' && (
+                <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center">
+                  <CheckCircle2 className="w-3.5 h-3.5 stroke-[3]" />
+                </div>
+              )}
+              <div className="space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black">
+                  <Scissors className="w-5 h-5" />
+                </div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Serviços / Barbearia</h4>
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                  Salões de beleza, barbearias, oficinas e estética. Habilita agenda e profissionais.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-100 mt-3 flex items-center gap-1.5 text-[9px] font-bold text-indigo-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                Agendamentos + Profissionais
+              </div>
+            </div>
+
+            {/* 4. Distribuidora / WMS */}
+            <div
+              onClick={() => handleSelectSegment('DISTRIBUTION')}
+              className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
+                rules.businessType === 'DISTRIBUTION'
+                  ? 'border-blue-500 bg-blue-50/50 shadow-md ring-2 ring-blue-500/20'
+                  : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'
+              }`}
+            >
+              {rules.businessType === 'DISTRIBUTION' && (
+                <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center">
+                  <CheckCircle2 className="w-3.5 h-3.5 stroke-[3]" />
+                </div>
+              )}
+              <div className="space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-black">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Distribuidora / WMS</h4>
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                  Atacadistas, depósitos e distribuidoras. Habilita transferências entre depósitos e compras por NF-e.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-100 mt-3 flex items-center gap-1.5 text-[9px] font-bold text-blue-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                Endereçamento + Multi-Depósito
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -205,32 +434,18 @@ export default function BusinessRules({ user }: { user: UserProfile }) {
             </div>
           </div>
 
-          {/* Right: Operational Profile */}
+          {/* Right: Operational Settings & Audit */}
           <div className="lg:col-span-4 space-y-6">
             <div className="bg-slate-900 rounded-[40px] p-6 text-white border border-slate-800 shadow-2xl space-y-6">
               <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-400" />
-                Perfil da Operação
+                Abertura de Caixa
               </h3>
 
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo de Negócio</label>
-                  <select 
-                    value={rules.businessType}
-                    onChange={e => setRules({...rules, businessType: e.target.value})}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="RETAIL">Varejo Convencional</option>
-                    <option value="FOOD">Restaurante / Bar (Mesas)</option>
-                    <option value="SERVICES">Prestação de Serviços</option>
-                    <option value="WHOLESALE">Atacado</option>
-                  </select>
-                </div>
-
                 <div className="p-4 bg-slate-800/50 rounded-2xl border border-slate-700 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-black text-white uppercase tracking-wider">Abertura de Caixa</p>
+                    <p className="text-[11px] font-black text-white uppercase tracking-wider">Exigir Abertura de Turno</p>
                     <button 
                       onClick={() => setRules({...rules, openCashRegisterOnStart: !rules.openCashRegisterOnStart})}
                       className={`w-10 h-5 rounded-full relative transition-all ${rules.openCashRegisterOnStart ? 'bg-emerald-500' : 'bg-slate-700'}`}
@@ -238,42 +453,30 @@ export default function BusinessRules({ user }: { user: UserProfile }) {
                       <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${rules.openCashRegisterOnStart ? 'right-1' : 'left-1'}`} />
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-500 font-medium">Exigir abertura manual de caixa em todos os terminais ao iniciar o dia.</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Exigir conferência de troco inicial em todos os terminais ao iniciar o dia.</p>
                 </div>
 
                 <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 space-y-2">
                   <div className="flex items-center gap-2 text-emerald-400">
                     <ShieldCheck className="w-4 h-4" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Modo Auditoria Ativo</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Modo Seguro Multi-Tenant</span>
                   </div>
                   <p className="text-[9px] text-emerald-100/60 leading-relaxed">
-                    Todas as alterações nestas regras são registradas na trilha de auditoria e notificadas aos administradores da empresa.
+                    Todas as regras são isoladas no nível do tenant e registradas na trilha de auditoria contra fraudes e desvios de caixa.
                   </p>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-800">
-                <h4 className="text-[10px] font-black uppercase text-slate-500 mb-3 tracking-widest">Ações Rápidas</h4>
-                <div className="space-y-2">
-                  <button className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
-                    Resetar Parâmetros
-                  </button>
-                  <button className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
-                    Exportar Configurações
-                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Help Card */}
+            {/* Info Card */}
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex gap-4">
-              <div className="p-2.5 bg-blue-50 rounded-2xl shrink-0">
-                <Info className="w-5 h-5 text-blue-500" />
+              <div className="p-2.5 bg-emerald-50 rounded-2xl shrink-0">
+                <Sparkles className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Precisa de Ajuda?</h4>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Experiência Descomplicada</h4>
                 <p className="text-[10px] text-slate-500 font-medium mt-1 leading-relaxed">
-                  As regras de negócio definem os limites e automações do seu sistema. Em caso de dúvida, consulte nossa Central de Conhecimento.
+                  O VarejoPro não requer módulos complexos ou instalações manuais. O sistema se molda dinamicamente ao seu negócio.
                 </p>
               </div>
             </div>

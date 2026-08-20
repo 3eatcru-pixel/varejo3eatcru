@@ -4,9 +4,53 @@ import { db } from '../../src/db';
 import { platformCompanies, platformSubscriptions, platformInvoices, platformWebhooks } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { PLATFORM_PLANS, PlanTier } from '../../src/types/licensing';
+import { LicenseService } from '../services/license.service';
 import { randomUUID } from 'crypto';
 
 const router = Router();
+
+// Company Entitlements & License Limits
+router.get(['/api/company/entitlements', '/api/billing/entitlements'], requireApiAuth, async (req: Request, res: Response) => {
+  try {
+    const auth = (req as any).auth || (req as any).userProfile;
+    const companyId = auth?.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Contexto de empresa não encontrado.' });
+    }
+
+    const entitlements = await LicenseService.getCompanyEntitlements(companyId);
+    return res.json({ success: true, entitlements });
+  } catch (error: any) {
+    console.error('Error fetching entitlements:', error);
+    return res.status(500).json({ error: error.message || 'Erro ao carregar licenças da empresa.' });
+  }
+});
+
+// Start 14-day PRO Trial
+router.post('/api/company/trial/start', requireApiAuth, async (req: Request, res: Response) => {
+  try {
+    const auth = (req as any).auth || (req as any).userProfile;
+    const companyId = auth?.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Contexto de empresa não encontrado.' });
+    }
+
+    const result = await LicenseService.startTrial(companyId, 14);
+    const entitlements = await LicenseService.getCompanyEntitlements(companyId);
+
+    return res.json({
+      success: true,
+      message: 'Período de teste PRO de 14 dias ativado com sucesso!',
+      trialEndsAt: result.trialEndsAt,
+      entitlements
+    });
+  } catch (error: any) {
+    console.error('Error starting trial:', error);
+    return res.status(500).json({ error: error.message || 'Erro ao iniciar trial.' });
+  }
+});
 
 router.post('/api/billing/checkout/session', requireApiAuth, async (req: Request, res: Response) => {
   try {

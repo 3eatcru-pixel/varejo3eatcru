@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { requireApiAuth, requirePermission } from "../middleware/auth";
 import { db } from "../../src/db/index.ts";
 import { financialRecords } from "../../src/db/schema.ts";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { logAuditEvent } from "../lib/audit";
 
 const router = express.Router();
@@ -20,20 +20,34 @@ router.get(["/api/finance/records", "/api/finance/list"], requireApiAuth, async 
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const offset = (page - 1) * limit;
     
-    const records = await db.select().from(financialRecords)
-      .where(
-        typeFilter 
-          ? and(eq(financialRecords.companyId, companyId), eq(financialRecords.type, typeFilter))
-          : eq(financialRecords.companyId, companyId)
-      )
-      .orderBy(desc(financialRecords.dueDate))
-      .limit(limit)
-      .offset(offset);
+    const whereClause = typeFilter 
+      ? and(eq(financialRecords.companyId, companyId), eq(financialRecords.type, typeFilter))
+      : eq(financialRecords.companyId, companyId);
+
+    const [records, [{ count }]] = await Promise.all([
+      db.select().from(financialRecords)
+        .where(whereClause)
+        .orderBy(desc(financialRecords.dueDate))
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: sql<number>`count(*)` }).from(financialRecords)
+        .where(whereClause)
+    ]);
+
+    const total = Number(count) || 0;
+    const totalPages = Math.ceil(total / limit) || 1;
 
     return res.json({ 
       success: true, 
       records,
-      pagination: { page, limit }
+      pagination: { 
+        page, 
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
+      }
     });
   } catch (error: any) {
     console.error("Erro ao listar registros financeiros:", error);
